@@ -1,0 +1,8 @@
+* text=auto
+*.py text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+# Preserve the supplied MRP documents byte-for-byte, including original line endings.
+docs/mrp/* -text

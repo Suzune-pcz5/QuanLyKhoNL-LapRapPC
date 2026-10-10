@@ -1,0 +1,197 @@
+erDiagram
+    %% Sinh tu metadata cua schema_MRP_HTTTDN_17_bang.sql tren MySQL 8.0.46.
+    %% SQL la chuan: CHECK, ENUM, UNIQUE co dieu kien va state machine xem SQL/README.
+    %% UK tren tung cot co the thuoc UNIQUE nhieu cot; khong suy ra UNIQUE don cot.
+    %% -- = FK la mot phan PK cua con; .. = FK khong la mot phan PK.
+    BIEN_DONG_KHO {
+        bigint MaBienDong PK "bigint; NOT NULL; auto_increment"
+        int MaSP FK "int; NOT NULL"
+        int MaViTri FK "int; NOT NULL"
+        enum LoaiBienDong "enum - xem SQL; NOT NULL"
+        int DeltaThucTe "int; NOT NULL"
+        int DeltaKhongBan "int; NOT NULL"
+        int MaCTPN FK, UK "int; NULL"
+        int MaCTPX FK, UK "int; NULL"
+        int MaNV FK "int; NOT NULL"
+        datetime ThoiDiem "datetime(6); NOT NULL"
+    }
+    BOM {
+        int MaBOM PK "int; NOT NULL; auto_increment"
+        int MaSPThanhPham FK, UK "int; NOT NULL"
+        int PhienBan UK "int; NOT NULL"
+        varchar TenCauHinh "varchar(200); NOT NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+        int MaNVLap FK "int; NOT NULL"
+        datetime NgayBanHanh "datetime(6); NULL"
+        int MaSPDangApDung UK "int; NULL; generated"
+    }
+    CT_BOM {
+        int MaBOM PK, FK "int; NOT NULL"
+        int MaSPLinhKien PK, FK "int; NOT NULL"
+        int DinhMuc "int; NOT NULL"
+    }
+    CT_NHU_CAU_LAP_RAP {
+        int MaYC PK, FK "int; NOT NULL"
+        int MaSPLinhKien PK, FK "int; NOT NULL"
+        int DinhMucChot "int; NOT NULL"
+        int SoLuongCan "int; NOT NULL"
+    }
+    CT_PHIEU_NHAP {
+        int MaCTPN PK "int; NOT NULL; auto_increment"
+        int MaPN FK "int; NOT NULL"
+        int MaSP FK "int; NOT NULL"
+        int MaViTri FK "int; NOT NULL"
+        int SoLuongNhan "int; NOT NULL"
+        int SoLuongLoi "int; NOT NULL"
+        decimal DonGiaNhap "decimal(15,2); NULL"
+        varchar KetQuaKiemTra "varchar(255); NULL"
+    }
+    CT_PHIEU_XUAT {
+        int MaCTPX PK "int; NOT NULL; auto_increment"
+        int MaPX FK, UK "int; NOT NULL"
+        int MaSP FK, UK "int; NOT NULL"
+        int MaViTri FK, UK "int; NOT NULL"
+        int SoLuongXuat "int; NOT NULL"
+    }
+    KET_QUA_LAP_RAP {
+        int MaKQ PK "int; NOT NULL; auto_increment"
+        int MaYC FK "int; NOT NULL"
+        int MaNVLap FK "int; NOT NULL"
+        int MaNVTiepNhan FK "int; NULL"
+        int SoLuongDat "int; NOT NULL"
+        int SoLuongLoi "int; NOT NULL"
+        int MaViTriDat FK "int; NULL"
+        int MaViTriLoi FK "int; NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+        varchar GhiChu "varchar(500); NULL"
+        datetime ThoiDiemTiepNhan "datetime(6); NULL"
+    }
+    LOAI_SAN_PHAM {
+        int MaLoai PK "int; NOT NULL; auto_increment"
+        varchar TenLoai "varchar(100); NOT NULL"
+        varchar MoTa "varchar(255); NULL"
+    }
+    NHA_CUNG_CAP {
+        int MaNCC PK "int; NOT NULL; auto_increment"
+        varchar TenNCC "varchar(150); NOT NULL"
+        varchar SoDienThoai "varchar(20); NULL"
+        varchar DiaChi "varchar(255); NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+    }
+    NHAN_VIEN {
+        int MaNV PK "int; NOT NULL; auto_increment"
+        varchar HoTen "varchar(100); NOT NULL"
+        varchar ChucVu "varchar(50); NULL"
+        varchar SoDienThoai "varchar(20); NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+    }
+    PHIEU_NHAP {
+        int MaPN PK "int; NOT NULL; auto_increment"
+        enum LoaiNhap "enum - xem SQL; NOT NULL"
+        int MaNCC FK "int; NULL"
+        int MaNguonKetQua FK, UK "int; NULL"
+        int MaNVLap FK "int; NOT NULL"
+        date NgayChungTu "date; NOT NULL"
+        datetime ThoiDiemGhiNhan "datetime(6); NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+        varchar GhiChu "varchar(255); NULL"
+    }
+    PHIEU_XUAT {
+        int MaPX PK "int; NOT NULL; auto_increment"
+        enum LoaiXuat "enum - xem SQL; NOT NULL"
+        int MaYCLapRap FK "int; NULL"
+        varchar TenNguoiNhan "varchar(150); NULL"
+        int MaNVLap FK "int; NOT NULL"
+        int MaNVDuyet FK "int; NULL"
+        datetime NgayDeNghi "datetime(6); NOT NULL"
+        datetime ThoiDiemThucHien "datetime(6); NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+        varchar GhiChu "varchar(500); NULL"
+        varchar LyDoTuChoi "varchar(255); NULL"
+        int MaYCHieuLuc UK "int; NULL; generated"
+    }
+    SAN_PHAM {
+        int MaSP PK "int; NOT NULL; auto_increment"
+        int MaLoai FK "int; NOT NULL"
+        varchar SKU UK "varchar(50); NOT NULL"
+        varchar TenSP "varchar(200); NOT NULL"
+        enum LoaiMatHang "enum - xem SQL; NOT NULL"
+        varchar DonViTinh "varchar(20); NOT NULL"
+        text MoTa "text; NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+    }
+    TAI_KHOAN {
+        int MaTK PK "int; NOT NULL; auto_increment"
+        int MaNV FK, UK "int; NOT NULL"
+        varchar TenDangNhap UK "varchar(100); NOT NULL"
+        varchar MatKhauBam "varchar(255); NOT NULL"
+        enum VaiTro "enum - xem SQL; NOT NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+        datetime NgayTao "datetime(6); NOT NULL"
+    }
+    TON_KHO {
+        int MaTonKho PK "int; NOT NULL; auto_increment"
+        int MaSP FK, UK "int; NOT NULL"
+        int MaViTri FK, UK "int; NOT NULL"
+        int SoLuongThucTe "int; NOT NULL"
+        int SoLuongKhongBan "int; NOT NULL"
+        int SoLuongKhaDung "int; NULL; generated"
+        datetime NgayCapNhat "datetime(6); NOT NULL"
+        int NguoiCapNhat FK "int; NULL"
+    }
+    VI_TRI_KHO {
+        int MaViTri PK "int; NOT NULL; auto_increment"
+        varchar MaViTriHienThi UK "varchar(50); NOT NULL"
+        varchar KhuVuc "varchar(50); NULL"
+        varchar Ke "varchar(50); NULL"
+        varchar Tang "varchar(50); NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+    }
+    YEU_CAU_LAP_RAP {
+        int MaYC PK "int; NOT NULL; auto_increment"
+        int MaBOM FK "int; NOT NULL"
+        int SoLuongYeuCau "int; NOT NULL"
+        int MaNVGiao FK "int; NOT NULL"
+        int MaNVNhan FK "int; NOT NULL"
+        datetime HanMongMuon "datetime; NULL"
+        datetime NgayGiao "datetime(6); NULL"
+        tinyint DaNhanViec "tinyint(1); NOT NULL"
+        enum TrangThai "enum - xem SQL; NOT NULL"
+        varchar LyDoHuy "varchar(255); NULL"
+    }
+    SAN_PHAM ||..o{ BIEN_DONG_KHO : "MaSP"
+    VI_TRI_KHO ||..o{ BIEN_DONG_KHO : "MaViTri"
+    CT_PHIEU_NHAP |o..o| BIEN_DONG_KHO : "MaCTPN"
+    CT_PHIEU_XUAT |o..o| BIEN_DONG_KHO : "MaCTPX"
+    NHAN_VIEN ||..o{ BIEN_DONG_KHO : "MaNV"
+    SAN_PHAM ||..o{ BOM : "MaSPThanhPham"
+    NHAN_VIEN ||..o{ BOM : "MaNVLap"
+    BOM ||--o{ CT_BOM : "MaBOM"
+    SAN_PHAM ||--o{ CT_BOM : "MaSPLinhKien"
+    YEU_CAU_LAP_RAP ||--o{ CT_NHU_CAU_LAP_RAP : "MaYC"
+    SAN_PHAM ||--o{ CT_NHU_CAU_LAP_RAP : "MaSPLinhKien"
+    PHIEU_NHAP ||..o{ CT_PHIEU_NHAP : "MaPN"
+    SAN_PHAM ||..o{ CT_PHIEU_NHAP : "MaSP"
+    VI_TRI_KHO ||..o{ CT_PHIEU_NHAP : "MaViTri"
+    PHIEU_XUAT ||..o{ CT_PHIEU_XUAT : "MaPX"
+    SAN_PHAM ||..o{ CT_PHIEU_XUAT : "MaSP"
+    VI_TRI_KHO ||..o{ CT_PHIEU_XUAT : "MaViTri"
+    YEU_CAU_LAP_RAP ||..o{ KET_QUA_LAP_RAP : "MaYC"
+    NHAN_VIEN ||..o{ KET_QUA_LAP_RAP : "MaNVLap"
+    NHAN_VIEN |o..o{ KET_QUA_LAP_RAP : "MaNVTiepNhan"
+    VI_TRI_KHO |o..o{ KET_QUA_LAP_RAP : "MaViTriDat"
+    VI_TRI_KHO |o..o{ KET_QUA_LAP_RAP : "MaViTriLoi"
+    NHA_CUNG_CAP |o..o{ PHIEU_NHAP : "MaNCC"
+    KET_QUA_LAP_RAP |o..o| PHIEU_NHAP : "MaNguonKetQua"
+    NHAN_VIEN ||..o{ PHIEU_NHAP : "MaNVLap"
+    YEU_CAU_LAP_RAP |o..o{ PHIEU_XUAT : "MaYCLapRap"
+    NHAN_VIEN ||..o{ PHIEU_XUAT : "MaNVLap"
+    NHAN_VIEN |o..o{ PHIEU_XUAT : "MaNVDuyet"
+    LOAI_SAN_PHAM ||..o{ SAN_PHAM : "MaLoai"
+    NHAN_VIEN ||..o| TAI_KHOAN : "MaNV"
+    SAN_PHAM ||..o{ TON_KHO : "MaSP"
+    VI_TRI_KHO ||..o{ TON_KHO : "MaViTri"
+    NHAN_VIEN |o..o{ TON_KHO : "NguoiCapNhat"
+    BOM ||..o{ YEU_CAU_LAP_RAP : "MaBOM"
+    NHAN_VIEN ||..o{ YEU_CAU_LAP_RAP : "MaNVGiao"
+    NHAN_VIEN ||..o{ YEU_CAU_LAP_RAP : "MaNVNhan"

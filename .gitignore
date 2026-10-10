@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+app/backups/
+app/.venv/
+app/node_modules/
+*.log
+.env
+.env.*
+!.env.example
+runtime.json
+*.pid
+.venv/
+venv/
+node_modules/

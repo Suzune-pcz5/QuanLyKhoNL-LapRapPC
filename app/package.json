@@ -1,0 +1,6 @@
+{
+  "name": "htttdn-warehouse-ui-checks",
+  "private": true,
+  "scripts": {"test": "node test_frontend.cjs"},
+  "devDependencies": {"jsdom": "26.1.0"}
+}
