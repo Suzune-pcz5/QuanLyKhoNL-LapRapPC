@@ -3,19 +3,19 @@
 -- MatKhauBam chi la placeholder, khong dung de dang nhap that.
 SET NAMES utf8mb4;
 SET time_zone='+07:00';
-INSERT INTO NHAN_VIEN(MaNV,HoTen) VALUES(1,'Quan ly demo'),(2,'Nhan vien lap rap demo'),(3,'Nhan vien khac'),(4,'Admin demo');
+INSERT INTO NHAN_VIEN(MaNV,HoTen) VALUES(1,'Quan ly demo'),(2,'Nhan vien lap rap demo'),(3,'Nhân viên khác'),(4,'Admin demo');
 INSERT INTO TAI_KHOAN(MaTK,MaNV,TenDangNhap,MatKhauBam,VaiTro) VALUES
 (1,1,'demo_quanly','DEMO_ONLY_NOT_A_PASSWORD_HASH','QUAN_LY_KHO'),
 (2,2,'demo_nhanvien','DEMO_ONLY_NOT_A_PASSWORD_HASH','NHAN_VIEN'),
 (3,3,'demo_khac','DEMO_ONLY_NOT_A_PASSWORD_HASH','NHAN_VIEN'),
 (4,4,'demo_admin','DEMO_ONLY_NOT_A_PASSWORD_HASH','ADMIN');
-INSERT INTO LOAI_SAN_PHAM(MaLoai,TenLoai) VALUES(1,'Linh kien PC'),(2,'PC lap rap');
+INSERT INTO LOAI_SAN_PHAM(MaLoai,TenLoai) VALUES(1,'Linh kiện PC'),(2,'PC lắp ráp');
 INSERT INTO SAN_PHAM(MaSP,MaLoai,SKU,TenSP,LoaiMatHang) VALUES
 (1,1,'CPU-DEMO','CPU demo','NGUYEN_LIEU'),
 (2,1,'RAM-DEMO','RAM demo','NGUYEN_LIEU'),
 (3,2,'PC-DEMO','PC demo - 1 CPU va 2 RAM','THANH_PHAM');
 INSERT INTO NHA_CUNG_CAP(MaNCC,TenNCC) VALUES(1,'NCC demo');
-INSERT INTO VI_TRI_KHO(MaViTri,MaViTriHienThi,KhuVuc) VALUES(1,'LK-A1','Nguyen lieu'),(2,'TP-A1','Thanh pham'),(3,'LOI-A1','Hang loi');
+INSERT INTO VI_TRI_KHO(MaViTri,MaViTriHienThi,KhuVuc) VALUES(1,'LK-A1','Nguyên liệu'),(2,'TP-A1','Thành phẩm'),(3,'LOI-A1','Hàng lỗi');
 
 -- Quan ly nhap 10 CPU, 20 RAM (trong do 2 RAM loi).
 INSERT INTO PHIEU_NHAP(MaPN,LoaiNhap,MaNCC,MaNVLap,NgayChungTu) VALUES(1,'NCC',1,1,CURRENT_DATE());

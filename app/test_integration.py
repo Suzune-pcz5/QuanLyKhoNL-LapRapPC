@@ -6,26 +6,29 @@ from concurrent.futures import ThreadPoolExecutor
 import pymysql
 
 from db import call, connect, execute, one, rows, settings
-from manage import initialize
+from manage import drop_temporary_database, initialize
 from server import create_app
 
 
 class WarehouseTests(unittest.TestCase):
     def setUp(self):
         self.database = 'mrp_test_' + secrets.token_hex(6)
+        self.addCleanup(self.cleanup_database)
         initialize(self.database)
         self.app = create_app({'TESTING': True, 'DATABASE': self.database})
+        self.addCleanup(lambda: self.app.session_interface.store.path.unlink(missing_ok=True))
         self.manager = self.login('quanly')
         self.employee = self.login('nhanvien')
         self.other = self.login('nhanvien_khac')
         self.admin = self.login('admin')
 
-    def tearDown(self):
-        # Only this test's generated database is ever removed.
-        assert self.database.startswith('mrp_test_') and self.database[9:].isalnum()
+    def cleanup_database(self):
+        # Runs even when setUp fails after creating a database or granting access.
         c = connect(admin=True)
-        execute(c, f'DROP DATABASE `{self.database}`')
-        c.close()
+        try:
+            drop_temporary_database(c, self.database)
+        finally:
+            c.close()
 
     def login(self, username):
         client = self.app.test_client()

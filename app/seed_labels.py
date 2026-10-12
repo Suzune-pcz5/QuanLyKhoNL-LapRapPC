@@ -13,6 +13,14 @@ PRODUCTS = [
     (2, 'RAM-DEMO', 'RAM-001', 'RAM demo', 'RAM'),
     (3, 'PC-DEMO', 'PC-001', 'PC demo - 1 CPU va 2 RAM', 'PC · 1 CPU + 2 RAM'),
 ]
+LEGACY_TEXT_LABELS = [
+    ('NHAN_VIEN', 'MaNV', 3, 'HoTen', 'Nhan vien khac', 'Nhân viên khác'),
+    ('LOAI_SAN_PHAM', 'MaLoai', 1, 'TenLoai', 'Linh kien PC', 'Linh kiện PC'),
+    ('LOAI_SAN_PHAM', 'MaLoai', 2, 'TenLoai', 'PC lap rap', 'PC lắp ráp'),
+    ('VI_TRI_KHO', 'MaViTri', 1, 'KhuVuc', 'Nguyen lieu', 'Nguyên liệu'),
+    ('VI_TRI_KHO', 'MaViTri', 2, 'KhuVuc', 'Thanh pham', 'Thành phẩm'),
+    ('VI_TRI_KHO', 'MaViTri', 3, 'KhuVuc', 'Hang loi', 'Hàng lỗi'),
+]
 
 
 def normalize_seed_labels(c):
@@ -43,7 +51,13 @@ def normalize_seed_labels(c):
                                 (4, 'Admin demo', 'Quản trị viên')]:
             execute(c, 'UPDATE NHAN_VIEN SET HoTen=%s WHERE MaNV=%s AND HoTen=%s', (new, ident, old))
         execute(c, 'UPDATE NHA_CUNG_CAP SET TenNCC=%s WHERE MaNCC=1 AND TenNCC=%s', ('Nhà cung cấp linh kiện', 'NCC demo'))
+        text_changes = 0
+        with c.cursor() as cursor:
+            for table, key, ident, field, old, new in LEGACY_TEXT_LABELS:
+                cursor.execute(f'UPDATE {table} SET {field}=%s WHERE {key}=%s AND CAST({field} AS BINARY)=CAST(%s AS BINARY)', (new, ident, old))
+                text_changes += cursor.rowcount
         c.commit()
+        return text_changes
     except Exception:
         c.rollback()
         raise

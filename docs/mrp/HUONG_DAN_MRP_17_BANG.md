@@ -1,6 +1,6 @@
 # Bản MRP riêng cho môn HTTTDN — 17 bảng
 
-Ngày chốt phạm vi: 10/10/2026. Căn cứ phần II và III.5 trong `SGU - 2026_2027 - HK1 - DO AN HTTTDN (1).docx`.
+Ngày chốt phạm vi: 10/10/2026. Tài liệu yêu cầu hiện hành: [PRD MRP 17 bảng](PRD_MRP_HTTTDN_17_bang.docx).
 
 Đây là bản thay phạm vi của thiết kế 38 bảng trước đó: chỉ quản lý kho nguyên vật liệu và quá trình lắp ráp PC theo yêu cầu môn. Tạo schema riêng, không thay bảng, khóa, dữ liệu hoặc API của CNPM. Đề môn không quy định số bảng; 17 là lựa chọn thiết kế để chạy đủ nghiệp vụ với phạm vi gọn.
 
@@ -10,7 +10,7 @@ Ngày chốt phạm vi: 10/10/2026. Căn cứ phần II và III.5 trong `SGU - 2
 - `ERD_MRP_HTTTDN_17_bang.mmd`: Mermaid ERD đầy đủ, 17 bảng, 122 thuộc tính, 36 FK.
 - `demo_MRP_17_bang.sql`: dữ liệu giả định và giao dịch minh họa, chạy một lần sau schema.
 
-Các file thiết kế 38 bảng được giữ làm bản cũ; không trộn hai script trong một CSDL. PRD Word trước đó có phạm vi tích hợp CNPM và các tính năng mở rộng; khi viết báo cáo MRP hiện tại, dùng phạm vi và tên bảng trong hướng dẫn này. Không tiếp tục mô tả giữ hàng online, khuyến mãi, đơn bán, kiểm kê hay hoàn vật liệu như chức năng của bản 17 bảng.
+Bộ tài liệu trong repository dùng phạm vi 17 bảng. Bản schema gốc để đối chiếu nằm trong [reference](reference/README.md); ứng dụng khởi tạo từ schema hiện hành ở thư mục này. Không mô tả giữ hàng online, khuyến mãi, đơn bán, kiểm kê hay hoàn vật liệu như chức năng của bản 17 bảng.
 
 ## 2. Vì sao cần đúng những bảng này
 

@@ -2,10 +2,12 @@
 import csv
 import hashlib
 import io
+import json
 import secrets
+import re
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import pymysql
@@ -15,6 +17,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from waitress import serve
 
 from db import BASE, call, connect, execute, insert, one, rows, settings, update
+from messages import FIELDS, TABLES, SQL_ERRORS
+from web_state import WebState, ServerSessions
 
 MANAGER = 'QUAN_LY_KHO'
 EMPLOYEE = 'NHAN_VIEN'
@@ -66,27 +70,42 @@ def stamp(user):
     return hashlib.sha256(user['MatKhauBam'].encode()).hexdigest()[:24]
 
 
+def authenticate(c, username, password):
+    user = one(c, 'SELECT t.*,n.HoTen,n.TrangThai NvState FROM TAI_KHOAN t JOIN NHAN_VIEN n ON n.MaNV=t.MaNV WHERE TenDangNhap=%s', (username,))
+    if user and user['TrangThai'] == 'HOAT_DONG' and user['NvState'] == 'DANG_LAM' and check_password_hash(user['MatKhauBam'], password):
+        return user
+    return None
+
+
+def ensure_no_active_jobs(c, employee):
+    jobs = rows(c, "SELECT MaYC FROM YEU_CAU_LAP_RAP WHERE MaNVNhan=%s AND TrangThai IN ('DA_GIAO','DA_CAP_VAT_LIEU','DANG_LAP_RAP') ORDER BY MaYC FOR UPDATE", (employee,))
+    need(not jobs, 'Nhân viên còn yêu cầu lắp ráp đang xử lý: ' + ', '.join('#'+str(j['MaYC']) for j in jobs) + '. Hoàn thành hoặc hủy yêu cầu hợp lệ trước khi khóa, đổi vai trò hoặc ngừng làm.', 409)
+
+
 def integer(value, name, minimum=1, optional=False):
+    name = FIELDS.get(name, name)
     if optional and value in ('', None):
         return None
     try:
         v = int(value)
         need(not isinstance(value, bool) and str(v) == str(value) and minimum <= v <= 2147483647, f'{name} phải là số nguyên từ {minimum}.')
         return v
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise Problem(f'{name} phải là số nguyên từ {minimum}.')
 
 
-def text(value, name, limit=255, required=False):
+def text(value, name, limit=255, required=False, strip=True):
+    name = FIELDS.get(name, name)
     need(value is None or isinstance(value, str), f'{name} phải là văn bản.')
-    value = (value or '').strip()
+    value = value or ''
+    if strip: value = value.strip()
     need(len(value) <= limit and (value or not required), f'{name} không hợp lệ (tối đa {limit} ký tự).')
     return value or None
 
 
 def active(c, table, key, ident, state='HOAT_DONG'):
     r = one(c, f'SELECT * FROM {table} WHERE {key}=%s', (ident,))
-    need(r is not None and ('TrangThai' not in r or r['TrangThai'] == state), f'{table} #{ident} không hoạt động hoặc không tồn tại.')
+    need(r is not None and ('TrangThai' not in r or r['TrangThai'] == state), f'{TABLES.get(table, "Đối tượng")} #{ident} không hoạt động hoặc không tồn tại.')
     return r
 
 
@@ -108,9 +127,11 @@ def create_app(test_config=None):
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     x = settings()
     app.config.update(SECRET_KEY=x['secret_key'], SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict',
-                      PERMANENT_SESSION_LIFETIME=timedelta(hours=8), MAX_CONTENT_LENGTH=512*1024,
+                      PERMANENT_SESSION_LIFETIME=timedelta(hours=8), SESSION_REFRESH_EACH_REQUEST=False, MAX_CONTENT_LENGTH=512*1024,
                       DATABASE=x['database'], TESTING=False)
     if test_config: app.config.update(test_config)
+    web_state = WebState(app.config['DATABASE'])
+    app.session_interface = ServerSessions(web_state, app.config['DATABASE'])
     rate = {}
     rate_lock = threading.Lock()
     backup_lock = threading.Lock()
@@ -129,7 +150,7 @@ def create_app(test_config=None):
         g.c = connect(database=app.config['DATABASE'])
         g.user = one(g.c, 'SELECT t.*,n.HoTen,n.TrangThai NhanVienTrangThai FROM TAI_KHOAN t JOIN NHAN_VIEN n ON n.MaNV=t.MaNV WHERE t.MaTK=%s', (session['account'],))
         if not g.user or g.user['TrangThai'] != 'HOAT_DONG' or g.user['NhanVienTrangThai'] != 'DANG_LAM' or session.get('stamp') != stamp(g.user):
-            session.clear()
+            # An old unauthorized response must not clear a newer login cookie.
             raise Problem('Tài khoản bị khóa, ngừng làm hoặc mật khẩu đã đổi. Đăng nhập lại.', 401)
 
     @app.teardown_request
@@ -149,13 +170,31 @@ def create_app(test_config=None):
             response.headers['Cache-Control'] = 'no-store'
         return response
 
+    def failure(message, **details):
+        if getattr(g, 'save_not_committed', False):
+            details['save_not_committed'] = True
+        return jsonify(error=message, **details)
+
     @app.errorhandler(Problem)
-    def problem(error): return jsonify(error=str(error)), error.status
+    def problem(error): return failure(str(error)), error.status
 
     @app.errorhandler(pymysql.MySQLError)
     def database_error(error):
         code = error.args[0] if error.args else 0
-        if code == 1644: message = str(error.args[1])
+        shortage = re.fullmatch(r'MRP_STOCK_SHORTAGE\|(\d+)\|(\d+)\|(\d+)\|(\d+)', str(error.args[1])) if code == 1644 else None
+        if shortage:
+            product, location, required, available = map(int, shortage.groups())
+            # Quantities come from the locked stock row, before the procedure rolled back.
+            sku = one(g.c, 'SELECT SKU FROM SAN_PHAM WHERE MaSP=%s', (product,))
+            place = one(g.c, 'SELECT MaViTriHienThi FROM VI_TRI_KHO WHERE MaViTri=%s', (location,))
+            details = dict(sku=sku['SKU'] if sku else f'#{product}', location=place['MaViTriHienThi'] if place else f'#{location}', required=required, available=available, missing=required-available)
+            message = f"{details['sku']} tại {details['location']}: cần {required}, khả dụng {available}, thiếu {details['missing']}."
+            return failure(message, code='INSUFFICIENT_STOCK', details=details), 409
+        if code == 1644:
+            message = SQL_ERRORS.get(str(error.args[1]))
+            if message is None:
+                app.logger.warning('Unmapped business diagnostic: %s', error.args[1])
+                message = 'Không thể thực hiện thao tác với trạng thái hiện tại. Tải lại dữ liệu và kiểm tra chứng từ.'
         elif code == 1062: message = 'Dữ liệu bị trùng. Kiểm tra SKU, phiên bản BOM hoặc phiếu cấp đang có hiệu lực.'
         elif code in (1451, 1452): message = 'Dữ liệu đã được tham chiếu hoặc đối tượng liên quan không tồn tại. Hãy ngừng sử dụng thay vì xóa lịch sử.'
         elif code in (3819, 1264, 1366): message = 'Giá trị không thỏa quy tắc dữ liệu. Kiểm tra số lượng, nguồn phiếu và vị trí.'
@@ -163,18 +202,25 @@ def create_app(test_config=None):
         else:
             app.logger.exception('Database operation failed')
             message = 'Không thể xử lý dữ liệu. Xem log backend hoặc thử lại.'
-        return jsonify(error=message), 409
+        return failure(message), 409
 
     @app.errorhandler(HTTPException)
-    def http_error(error): return jsonify(error='Yêu cầu không hợp lệ hoặc đường dẫn không tồn tại.'), error.code
+    def http_error(error): return failure('Yêu cầu không hợp lệ hoặc đường dẫn không tồn tại.'), error.code
 
     @app.errorhandler(Exception)
     def unexpected_error(error):
         app.logger.exception('Unexpected operation failure')
-        return jsonify(error='Không thể hoàn tất thao tác. Xem log backend để kiểm tra.'), 500
+        return failure('Không thể hoàn tất thao tác. Xem log backend để kiểm tra.'), 500
 
     def role(expected):
         need(g.user['VaiTro'] == expected, 'Tài khoản không có quyền thực hiện thao tác này.', 403)
+
+    def serialize_access_changes():
+        # CALL owns its transaction, so use a connection lock across that commit.
+        # Closing g.c at teardown releases the lock, including error paths.
+        name = 'mrp_access_' + hashlib.sha256(app.config['DATABASE'].encode()).hexdigest()[:40]
+        need(one(g.c, 'SELECT GET_LOCK(%s,5) acquired', (name,))['acquired'] == 1,
+             'Đang giao việc hoặc cập nhật quyền nhân viên. Thử lại sau.', 409)
 
     def body():
         b = request.get_json(silent=True)
@@ -200,6 +246,8 @@ def create_app(test_config=None):
     @app.post('/api/login')
     def login():
         b = body()
+        # A failed account switch must not leave the previous account authenticated.
+        session.pop('account', None); session.pop('stamp', None)
         ip = request.remote_addr
         with rate_lock:
             attempts = [t for t in rate.get(ip, []) if t > time.time()-60]
@@ -207,10 +255,12 @@ def create_app(test_config=None):
             attempts.append(time.time()); rate[ip] = attempts
         c = connect(database=app.config['DATABASE'])
         try:
-            u = one(c, 'SELECT t.*,n.HoTen,n.TrangThai NvState FROM TAI_KHOAN t JOIN NHAN_VIEN n ON n.MaNV=t.MaNV WHERE TenDangNhap=%s', (text(b.get('username'), 'Tên đăng nhập', 100, True),))
-            password = text(b.get('password'), 'Mật khẩu', 255, True)
-            need(u and u['TrangThai'] == 'HOAT_DONG' and u['NvState'] == 'DANG_LAM' and check_password_hash(u['MatKhauBam'], password), 'Tên đăng nhập, mật khẩu không đúng hoặc tài khoản bị khóa.', 401)
+            username = text(b.get('username'), 'Tên đăng nhập', 100, True)
+            password = text(b.get('password'), 'Mật khẩu', 255, True, strip=False)
+            u = authenticate(c, username, password)
+            need(u, 'Tên đăng nhập, mật khẩu không đúng hoặc tài khoản bị khóa.', 401)
             session.clear(); session.permanent = True
+            session.rotate = True
             session.update(account=u['MaTK'], stamp=stamp(u), csrf=secrets.token_urlsafe(32))
             return jsonify(user=public_user(u), csrf=session['csrf'])
         finally: c.close()
@@ -231,6 +281,10 @@ def create_app(test_config=None):
             result['employees'] = [n for n in result['employees'] if n['MaNV'] == u['MaNV']]
         result['accounts'] = rows(c, 'SELECT MaTK,MaNV,TenDangNhap,VaiTro,TrangThai,NgayTao FROM TAI_KHOAN ORDER BY MaTK') if u['VaiTro'] == ADMIN else []
         result['inventory'] = rows(c, 'SELECT v.*,s.TrangThai SanPhamTrangThai,k.TrangThai ViTriTrangThai FROM V_TON_KHO v JOIN SAN_PHAM s ON s.MaSP=v.MaSP JOIN VI_TRI_KHO k ON k.MaViTri=v.MaViTri ORDER BY SKU,MaViTri')
+        issuable = {}
+        for item in result['inventory']:
+            if item['SanPhamTrangThai'] == 'HOAT_DONG' and item['ViTriTrangThai'] == 'HOAT_DONG':
+                issuable[item['MaSP']] = issuable.get(item['MaSP'], 0) + item['SoLuongKhaDung']
         for kind, (table, key, _role, _owner, _fields) in DOCS.items():
             where, args = '', ()
             if u['VaiTro'] == EMPLOYEE:
@@ -244,6 +298,9 @@ def create_app(test_config=None):
                     d['lines'] = rows(c, f'SELECT * FROM {detail_table} WHERE {key}=%s', (d[key],))
                 if kind == 'jobs':
                     d['needs'] = rows(c, 'SELECT * FROM V_NHU_CAU_LAP_RAP WHERE MaYC=%s', (d[key],))
+                    for item in d['needs']:
+                        item['SoLuongKhaDung'] = issuable.get(item['MaSPLinhKien'], 0)
+                        item['SoLuongThieu'] = max(0, item['SoLuongCan'] - item['SoLuongDaCap'] - item['SoLuongKhaDung'])
                     d['materials'] = rows(c, 'SELECT * FROM V_VAT_LIEU_LAP_RAP WHERE MaYC=%s', (d[key],))
                     d['accepted'] = one(c, "SELECT COALESCE(SUM(SoLuongDat+SoLuongLoi),0) n FROM KET_QUA_LAP_RAP WHERE MaYC=%s AND TrangThai='DA_TIEP_NHAN'", (d[key],))['n']
                     d['pending'] = one(c, "SELECT COALESCE(SUM(SoLuongDat+SoLuongLoi),0) n FROM KET_QUA_LAP_RAP WHERE MaYC=%s AND TrangThai='CHO_TIEP_NHAN'", (d[key],))['n']
@@ -257,6 +314,7 @@ def create_app(test_config=None):
             ncc = integer(b.get('MaNCC'), 'Nhà cung cấp'); active(c, 'NHA_CUNG_CAP', 'MaNCC', ncc)
             try: day = date.fromisoformat(b.get('NgayChungTu', ''))
             except (TypeError, ValueError): raise Problem('Ngày chứng từ không hợp lệ.')
+            need(day.year >= 1000, 'Ngày chứng từ phải thuộc năm từ 1000 đến 9999.')
             return dict(MaNCC=ncc, NgayChungTu=day, GhiChu=text(b.get('GhiChu'), 'Ghi chú'))
         if kind == 'outgoing':
             typ = b.get('LoaiXuat'); need(typ in ('CAP_PHAT', 'THANH_PHAM'), 'Loại xuất không hợp lệ.')
@@ -276,6 +334,11 @@ def create_app(test_config=None):
             due = b.get('HanMongMuon')
             try: due = datetime.fromisoformat(due) if due else None
             except (TypeError, ValueError): raise Problem('Hạn mong muốn không hợp lệ.')
+            if due:
+                try:
+                    if due.tzinfo: due = due.astimezone(timezone(timedelta(hours=7))).replace(tzinfo=None)
+                except (OverflowError, ValueError): raise Problem('Hạn mong muốn không hợp lệ.')
+                need(due.year >= 1000, 'Hạn mong muốn phải thuộc năm từ 1000 đến 9999.')
             return dict(MaBOM=bom, SoLuongYeuCau=integer(b.get('SoLuongYeuCau'), 'Số PC'), MaNVNhan=nv, HanMongMuon=due)
         dat = integer(b.get('SoLuongDat', 0), 'Số đạt', 0); loi = integer(b.get('SoLuongLoi', 0), 'Số lỗi', 0)
         need(dat + loi > 0, 'Cần ít nhất một PC đạt hoặc lỗi.')
@@ -286,7 +349,7 @@ def create_app(test_config=None):
             result[key] = ident
         return result
 
-    def save_lines(kind, ident, b):
+    def save_lines(kind, ident, b, previous_notes=None):
         table, fields = DETAILS[kind]; key = DOCS[kind][1]
         lines = b.get('lines')
         need(isinstance(lines, list) and 0 < len(lines) <= 100, 'Cần từ 1 đến 100 dòng chi tiết.')
@@ -300,7 +363,10 @@ def create_app(test_config=None):
                     try: value = Decimal(str(value))
                     except (InvalidOperation, ValueError): raise Problem('Giá nhập không hợp lệ.')
                     need(value.is_finite() and 0 <= value <= Decimal('9999999999999.99') and value.as_tuple().exponent >= -2, 'Giá nhập phải không âm và có tối đa 2 chữ số thập phân.')
-                elif field == 'KetQuaKiemTra': value = text(value, 'Kiểm nhận')
+                elif field == 'KetQuaKiemTra':
+                    if field not in line:
+                        value = (previous_notes or {}).get((data['MaSP'], data['MaViTri']))
+                    value = text(value, 'Kiểm nhận')
                 else: value = integer(value if value is not None else 0, field, 0 if field == 'SoLuongLoi' else 1)
                 data[field] = value
             product_key = 'MaSPLinhKien' if kind == 'bom' else 'MaSP'
@@ -317,14 +383,36 @@ def create_app(test_config=None):
     def documents(kind, ident=None):
         need(kind in DOCS, 'Loại chứng từ không hợp lệ.', 404)
         table, key, expected, owner, _fields = DOCS[kind]; role(expected)
-        c = g.c; c.begin()
+        c = g.c
+        token = request.headers.get('Idempotency-Key') if request.method == 'POST' else None
+        fingerprint = None
+        if token is not None:
+            need(bool(re.fullmatch(r'[A-Za-z0-9_-]{16,80}', token)), 'Mã thao tác lưu không hợp lệ.')
+            b = body()
+            fingerprint = hashlib.sha256(json.dumps(b, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
+            lock = 'mrp_save_' + hashlib.sha256(f"{app.config['DATABASE']}:{g.user['MaTK']}:{kind}:{token}".encode()).hexdigest()[:48]
+            need(one(c, 'SELECT GET_LOCK(%s,5) acquired', (lock,))['acquired'] == 1, 'Lần lưu trước đang xử lý. Thử lại trên cùng biểu mẫu.', 409)
+            saved = web_state.operation(g.user['MaTK'], kind, token)
+            if saved:
+                need(saved['fingerprint'] == fingerprint, 'Lần lưu trước có dữ liệu khác. Kiểm tra phiếu đã lưu trước khi tạo mới.', 409)
+                doc = one(c, f'SELECT * FROM {table} WHERE {key}=%s', (saved['ident'],))
+                if doc:
+                    need(doc[owner] == g.user['MaNV'], 'Phiếu đã lưu không thuộc tài khoản này.', 403)
+                    web_state.complete(g.user['MaTK'], kind, token)
+                    return jsonify(id=saved['ident'], replayed=True, message='Phiếu này đã được lưu trước đó. Không tạo thêm phiếu.')
+                need(not saved['completed'], 'Phiếu của lần lưu này đã bị xóa. Tạo biểu mẫu mới nếu cần.', 409)
+        commit_attempted = False
+        c.begin()
         try:
+            previous_notes = {}
             if ident:
                 old = one(c, f'SELECT * FROM {table} WHERE {key}=%s FOR UPDATE', (ident,))
                 need(old, 'Không tìm thấy chứng từ.', 404)
                 need(old[owner] == g.user['MaNV'], 'Chỉ được sửa nháp của mình.', 403)
                 need(old['TrangThai'] == 'NHAP', 'Chứng từ đã gửi/chốt; chỉ được xem hoặc in.', 409)
                 if kind == 'incoming': need(old['LoaiNhap'] == 'NCC', 'Nhập nội bộ do hệ thống quản lý.', 403)
+                if kind == 'incoming':
+                    previous_notes = {(r['MaSP'], r['MaViTri']): r['KetQuaKiemTra'] for r in rows(c, 'SELECT MaSP,MaViTri,KetQuaKiemTra FROM CT_PHIEU_NHAP WHERE MaPN=%s', (ident,))}
                 if kind in DETAILS: execute(c, f'DELETE FROM {DETAILS[kind][0]} WHERE {key}=%s', (ident,))
                 if request.method == 'DELETE':
                     execute(c, f'DELETE FROM {table} WHERE {key}=%s', (ident,)); c.commit(); return jsonify(ok=True)
@@ -340,11 +428,21 @@ def create_app(test_config=None):
                     need(job['TrangThai'] in ('DA_CAP_VAT_LIEU', 'DANG_LAP_RAP'), 'Cần cấp vật liệu trước khi ghi kết quả.')
                     values['MaYC'] = yc
                 ident = insert(c, table, values)
-            if kind in DETAILS: save_lines(kind, ident, b)
+            if kind in DETAILS: save_lines(kind, ident, b, previous_notes)
+            if token:
+                web_state.reserve(g.user['MaTK'], kind, token, fingerprint, ident)
+            commit_attempted = True
             c.commit()
+            if token:
+                web_state.complete(g.user['MaTK'], kind, token)
             return jsonify(id=ident, message='Đã lưu nháp. Tồn kho chưa thay đổi.')
         except Exception:
-            c.rollback(); raise
+            c.rollback()
+            # Only a confirmed rollback before COMMIT proves that this operation
+            # created no document. Lock conflicts and post-COMMIT failures do not.
+            if token and not commit_attempted:
+                g.save_not_committed = True
+            raise
 
     @app.post('/api/actions/<kind>/<int:ident>/<action>')
     def action_route(kind, ident, action):
@@ -356,6 +454,8 @@ def create_app(test_config=None):
         if expected == EMPLOYEE:
             owner = 'MaNVNhan' if kind == 'jobs' else 'MaNVLap'
             need(doc[owner] == g.user['MaNV'], 'Không được thao tác chứng từ của người khác.', 403)
+        if kind == 'jobs' and action == 'assign':
+            serialize_access_changes()
         args = [g.user['MaTK'], ident]
         if action in ('reject', 'cancel'): args.append(text(body().get('reason'), 'Lý do', 255, True))
         # No enclosing transaction. Public routines own BEGIN/COMMIT/ROLLBACK.
@@ -372,6 +472,7 @@ def create_app(test_config=None):
     @app.route('/api/catalog/<kind>/<int:ident>', methods=['PUT', 'DELETE'])
     def catalog(kind, ident=None):
         role(ADMIN); need(kind in CATALOGS, 'Danh mục không tồn tại.', 404)
+        if kind == 'employees': serialize_access_changes()
         table, key, fields = CATALOGS[kind]; c = g.c; c.begin()
         try:
             old = one(c, f'SELECT * FROM {table} WHERE {key}=%s FOR UPDATE', (ident,)) if ident else None
@@ -389,11 +490,13 @@ def create_app(test_config=None):
                     data[field] = b.get(field, options[0]); need(data[field] in options, 'Trạng thái không hợp lệ.')
                 elif field == 'LoaiMatHang':
                     data[field] = b.get(field); need(data[field] in ('NGUYEN_LIEU','THANH_PHAM'), 'Loại mặt hàng không hợp lệ.')
-                else: data[field] = text(b.get(field), field, limits.get(field,255), field in required)
+                else: data[field] = text(b.get(field), field, 500 if field == 'MoTa' and kind == 'products' else limits.get(field,255), field in required)
             if old and kind == 'products':
                 used = one(c, 'SELECT (SELECT COUNT(*) FROM CT_PHIEU_NHAP WHERE MaSP=%s)+(SELECT COUNT(*) FROM CT_PHIEU_XUAT WHERE MaSP=%s)+(SELECT COUNT(*) FROM CT_BOM WHERE MaSPLinhKien=%s)+(SELECT COUNT(*) FROM BOM WHERE MaSPThanhPham=%s) n', (ident,)*4)['n']
                 if used: need(all(data[f] == old[f] for f in ('SKU','LoaiMatHang','DonViTinh')), 'Sản phẩm đã có chứng từ: giữ nguyên SKU, loại và đơn vị tính.',409)
-            if old and kind == 'employees' and data['TrangThai'] == 'NGUNG_LAM': need(ident != g.user['MaNV'], 'Không thể tự ngừng tài khoản đang dùng.')
+            if old and kind == 'employees' and data['TrangThai'] == 'NGUNG_LAM':
+                need(ident != g.user['MaNV'], 'Không thể tự ngừng tài khoản đang dùng.')
+                ensure_no_active_jobs(c, ident)
             if old: update(c, table, key, ident, data)
             else: ident = insert(c, table, data)
             c.commit(); return jsonify(id=ident, message='Đã lưu danh mục.')
@@ -402,7 +505,7 @@ def create_app(test_config=None):
     @app.route('/api/accounts', methods=['POST'])
     @app.route('/api/accounts/<int:ident>', methods=['PUT','DELETE'])
     def accounts(ident=None):
-        role(ADMIN); c = g.c; c.begin()
+        role(ADMIN); serialize_access_changes(); c = g.c; c.begin()
         try:
             old = one(c, 'SELECT * FROM TAI_KHOAN WHERE MaTK=%s FOR UPDATE', (ident,)) if ident else None
             if ident: need(old, 'Không tìm thấy tài khoản.',404)
@@ -414,9 +517,11 @@ def create_app(test_config=None):
             b = body(); data = {'VaiTro':b.get('VaiTro'),'TrangThai':b.get('TrangThai','HOAT_DONG')}
             need(data['VaiTro'] in (ADMIN, MANAGER, EMPLOYEE) and data['TrangThai'] in ('HOAT_DONG','KHOA'), 'Vai trò hoặc trạng thái không hợp lệ.')
             if old and ident == g.user['MaTK']: need(data['VaiTro']==ADMIN and data['TrangThai']=='HOAT_DONG', 'Không thể tự khóa hoặc bỏ quyền Admin.')
+            if old and (data['TrangThai'] == 'KHOA' or data['VaiTro'] != EMPLOYEE):
+                ensure_no_active_jobs(c, old['MaNV'])
             pw = b.get('password')
             if pw or not old:
-                pw = text(pw, 'Mật khẩu',255,True); need(len(pw)>=8, 'Mật khẩu cần ít nhất 8 ký tự.'); data['MatKhauBam']=generate_password_hash(pw)
+                pw = text(pw, 'Mật khẩu',255,True,strip=False); need(len(pw)>=8, 'Mật khẩu cần ít nhất 8 ký tự.'); data['MatKhauBam']=generate_password_hash(pw)
             if old: update(c,'TAI_KHOAN','MaTK',ident,data)
             else:
                 data['MaNV']=integer(b.get('MaNV'),'Nhân viên'); active(c,'NHAN_VIEN','MaNV',data['MaNV'],'DANG_LAM')
@@ -433,6 +538,7 @@ def create_app(test_config=None):
             end = datetime.fromisoformat(request.args.get('to',''))
         except ValueError: raise Problem('Chọn khoảng ngày báo cáo hợp lệ.')
         need(start.tzinfo is None and end.tzinfo is None and end > start, 'Mốc kết thúc phải sau mốc đầu, theo UTC+7.')
+        need(start.year >= 1000 and end.year >= 1000, 'Khoảng báo cáo phải thuộc năm từ 1000 đến 9999.')
         data = call(g.c,'sp_bao_cao_kho',(g.user['MaTK'],start,end))
         typ = request.args.get('type'); loc = request.args.get('location'); q = request.args.get('q','').casefold()
         data = [r for r in data if (not typ or r['LoaiMatHang']==typ) and (not loc or str(r['MaViTri'])==loc) and (not q or q in (r['SKU']+' '+r['TenSP']).casefold())]
@@ -441,7 +547,7 @@ def create_app(test_config=None):
             keys=['SKU','TenSP','LoaiMatHang','DonViTinh','MaViTri','TonDauKy','NhapTrongKy','XuatTrongKy','TonCuoiKy','KhongBanCuoiKy','KhaDungCuoiKy']
             writer.writerow(keys)
             for r in data:
-                writer.writerow([("'"+str(r[k])) if isinstance(r[k],str) and r[k].startswith(('=','+','-','@')) else r[k] for k in keys])
+                writer.writerow([("'"+r[k]) if isinstance(r[k],str) and re.match(r'^[\x00-\x20]*[=+@-]|^[\t\r\n]', r[k]) else r[k] for k in keys])
             response=app.response_class('\ufeff'+stream.getvalue(),mimetype='text/csv; charset=utf-8')
             response.headers['Content-Disposition']='attachment; filename="bao_cao_kho.csv"'
             return response
@@ -464,9 +570,11 @@ def create_app(test_config=None):
     @app.post('/api/restore-test')
     def restore_route():
         role(ADMIN)
-        from manage import verify_restore
+        from manage import BackupVerificationError, verify_restore
         need(backup_lock.acquire(blocking=False),'Đang có tác vụ sao lưu/khôi phục.',409)
         try: result=verify_restore(text(body().get('file'), 'Tên backup', 255, True))
+        except (BackupVerificationError, ValueError) as error:
+            raise Problem(str(error), 409)
         finally: backup_lock.release()
         return jsonify(result=result,message='Khôi phục thử nghiệm đạt; dữ liệu chính được giữ nguyên.')
 

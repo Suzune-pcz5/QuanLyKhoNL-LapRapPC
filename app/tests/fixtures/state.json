@@ -1,0 +1,584 @@
+{
+  "accounts": [
+    {
+      "MaNV": 1,
+      "MaTK": 1,
+      "NgayTao": "2026-10-11 10:34:58.946894",
+      "TenDangNhap": "quanly",
+      "TrangThai": "HOAT_DONG",
+      "VaiTro": "QUAN_LY_KHO"
+    },
+    {
+      "MaNV": 2,
+      "MaTK": 2,
+      "NgayTao": "2026-10-11 10:34:58.946894",
+      "TenDangNhap": "nhanvien",
+      "TrangThai": "HOAT_DONG",
+      "VaiTro": "NHAN_VIEN"
+    },
+    {
+      "MaNV": 3,
+      "MaTK": 3,
+      "NgayTao": "2026-10-11 10:34:58.946894",
+      "TenDangNhap": "nhanvien_khac",
+      "TrangThai": "HOAT_DONG",
+      "VaiTro": "NHAN_VIEN"
+    },
+    {
+      "MaNV": 4,
+      "MaTK": 4,
+      "NgayTao": "2026-10-11 10:34:58.946894",
+      "TenDangNhap": "admin",
+      "TrangThai": "HOAT_DONG",
+      "VaiTro": "ADMIN"
+    }
+  ],
+  "bom": [
+    {
+      "MaBOM": 1,
+      "MaNVLap": 1,
+      "MaSPDangApDung": 3,
+      "MaSPThanhPham": 3,
+      "NgayBanHanh": "2026-10-11 10:34:58.999914",
+      "PhienBan": 1,
+      "TenCauHinh": "Cau hinh PC demo",
+      "TrangThai": "DANG_AP_DUNG",
+      "lines": [
+        {
+          "DinhMuc": 1,
+          "MaBOM": 1,
+          "MaSPLinhKien": 1
+        },
+        {
+          "DinhMuc": 2,
+          "MaBOM": 1,
+          "MaSPLinhKien": 2
+        }
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "MaLoai": 1,
+      "MoTa": null,
+      "TenLoai": "Linh kiện PC"
+    },
+    {
+      "MaLoai": 2,
+      "MoTa": null,
+      "TenLoai": "PC lắp ráp"
+    }
+  ],
+  "database": "MySQL 8.4 · 17 bảng",
+  "employees": [
+    {
+      "ChucVu": null,
+      "HoTen": "Quản lý kho",
+      "MaNV": 1,
+      "MaTK": 1,
+      "SoDienThoai": null,
+      "TaiKhoanTrangThai": "HOAT_DONG",
+      "TrangThai": "DANG_LAM",
+      "VaiTro": "QUAN_LY_KHO"
+    },
+    {
+      "ChucVu": null,
+      "HoTen": "Nhân viên lắp ráp",
+      "MaNV": 2,
+      "MaTK": 2,
+      "SoDienThoai": null,
+      "TaiKhoanTrangThai": "HOAT_DONG",
+      "TrangThai": "DANG_LAM",
+      "VaiTro": "NHAN_VIEN"
+    },
+    {
+      "ChucVu": null,
+      "HoTen": "Nhân viên khác",
+      "MaNV": 3,
+      "MaTK": 3,
+      "SoDienThoai": null,
+      "TaiKhoanTrangThai": "HOAT_DONG",
+      "TrangThai": "DANG_LAM",
+      "VaiTro": "NHAN_VIEN"
+    },
+    {
+      "ChucVu": null,
+      "HoTen": "Quản trị viên",
+      "MaNV": 4,
+      "MaTK": 4,
+      "SoDienThoai": null,
+      "TaiKhoanTrangThai": "HOAT_DONG",
+      "TrangThai": "DANG_LAM",
+      "VaiTro": "ADMIN"
+    }
+  ],
+  "incoming": [
+    {
+      "GhiChu": null,
+      "LoaiNhap": "THANH_PHAM",
+      "MaNCC": null,
+      "MaNVLap": 1,
+      "MaNguonKetQua": 2,
+      "MaPN": 3,
+      "NgayChungTu": "2026-10-11",
+      "ThoiDiemGhiNhan": "2026-10-11 10:34:59.073428",
+      "TrangThai": "DA_GHI_NHAN",
+      "lines": [
+        {
+          "DonGiaNhap": null,
+          "KetQuaKiemTra": null,
+          "MaCTPN": 4,
+          "MaPN": 3,
+          "MaSP": 3,
+          "MaViTri": 3,
+          "SoLuongLoi": 1,
+          "SoLuongNhan": 1
+        }
+      ]
+    },
+    {
+      "GhiChu": null,
+      "LoaiNhap": "THANH_PHAM",
+      "MaNCC": null,
+      "MaNVLap": 1,
+      "MaNguonKetQua": 1,
+      "MaPN": 2,
+      "NgayChungTu": "2026-10-11",
+      "ThoiDiemGhiNhan": "2026-10-11 10:34:59.063991",
+      "TrangThai": "DA_GHI_NHAN",
+      "lines": [
+        {
+          "DonGiaNhap": null,
+          "KetQuaKiemTra": null,
+          "MaCTPN": 3,
+          "MaPN": 2,
+          "MaSP": 3,
+          "MaViTri": 2,
+          "SoLuongLoi": 0,
+          "SoLuongNhan": 2
+        }
+      ]
+    },
+    {
+      "GhiChu": null,
+      "LoaiNhap": "NCC",
+      "MaNCC": 1,
+      "MaNVLap": 1,
+      "MaNguonKetQua": null,
+      "MaPN": 1,
+      "NgayChungTu": "2026-10-11",
+      "ThoiDiemGhiNhan": "2026-10-11 10:34:58.986222",
+      "TrangThai": "DA_GHI_NHAN",
+      "lines": [
+        {
+          "DonGiaNhap": 1800000,
+          "KetQuaKiemTra": null,
+          "MaCTPN": 1,
+          "MaPN": 1,
+          "MaSP": 1,
+          "MaViTri": 1,
+          "SoLuongLoi": 0,
+          "SoLuongNhan": 10
+        },
+        {
+          "DonGiaNhap": 400000,
+          "KetQuaKiemTra": null,
+          "MaCTPN": 2,
+          "MaPN": 1,
+          "MaSP": 2,
+          "MaViTri": 1,
+          "SoLuongLoi": 2,
+          "SoLuongNhan": 20
+        }
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "NGUYEN_LIEU",
+      "MaSP": 1,
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "SKU": "CPU-001",
+      "SanPhamTrangThai": "HOAT_DONG",
+      "SoLuongKhaDung": 7,
+      "SoLuongKhongBan": 0,
+      "SoLuongThucTe": 7,
+      "TenSP": "CPU",
+      "ViTriTrangThai": "HOAT_DONG"
+    },
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "THANH_PHAM",
+      "MaSP": 3,
+      "MaViTri": 2,
+      "MaViTriHienThi": "TP-A1",
+      "SKU": "PC-001",
+      "SanPhamTrangThai": "HOAT_DONG",
+      "SoLuongKhaDung": 1,
+      "SoLuongKhongBan": 0,
+      "SoLuongThucTe": 1,
+      "TenSP": "PC · 1 CPU + 2 RAM",
+      "ViTriTrangThai": "HOAT_DONG"
+    },
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "THANH_PHAM",
+      "MaSP": 3,
+      "MaViTri": 3,
+      "MaViTriHienThi": "LOI-A1",
+      "SKU": "PC-001",
+      "SanPhamTrangThai": "HOAT_DONG",
+      "SoLuongKhaDung": 0,
+      "SoLuongKhongBan": 1,
+      "SoLuongThucTe": 1,
+      "TenSP": "PC · 1 CPU + 2 RAM",
+      "ViTriTrangThai": "HOAT_DONG"
+    },
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "NGUYEN_LIEU",
+      "MaSP": 2,
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "SKU": "RAM-001",
+      "SanPhamTrangThai": "HOAT_DONG",
+      "SoLuongKhaDung": 12,
+      "SoLuongKhongBan": 2,
+      "SoLuongThucTe": 14,
+      "TenSP": "RAM",
+      "ViTriTrangThai": "HOAT_DONG"
+    }
+  ],
+  "jobs": [
+    {
+      "DaNhanViec": 1,
+      "HanMongMuon": null,
+      "LyDoHuy": null,
+      "MaBOM": 1,
+      "MaNVGiao": 1,
+      "MaNVNhan": 2,
+      "MaYC": 1,
+      "NgayGiao": "2026-10-11 10:34:59.009310",
+      "SoLuongYeuCau": 3,
+      "TrangThai": "HOAN_THANH",
+      "accepted": 3,
+      "materials": [
+        {
+          "DinhMucChot": 1,
+          "MaSPLinhKien": 1,
+          "MaYC": 1,
+          "SoLuongCan": 3,
+          "SoLuongCon": 0,
+          "SoLuongDaCap": 3,
+          "SoLuongDaDung": 3
+        },
+        {
+          "DinhMucChot": 2,
+          "MaSPLinhKien": 2,
+          "MaYC": 1,
+          "SoLuongCan": 6,
+          "SoLuongCon": 0,
+          "SoLuongDaCap": 6,
+          "SoLuongDaDung": 6
+        }
+      ],
+      "needs": [
+        {
+          "DinhMucChot": 1,
+          "MaSPLinhKien": 1,
+          "MaYC": 1,
+          "SKU": "CPU-001",
+          "SoLuongCan": 3,
+          "SoLuongDaCap": 3,
+          "SoLuongKhaDung": 7,
+          "SoLuongThieu": 0
+        },
+        {
+          "DinhMucChot": 2,
+          "MaSPLinhKien": 2,
+          "MaYC": 1,
+          "SKU": "RAM-001",
+          "SoLuongCan": 6,
+          "SoLuongDaCap": 6,
+          "SoLuongKhaDung": 12,
+          "SoLuongThieu": 0
+        }
+      ],
+      "pending": 0
+    }
+  ],
+  "ledger": [
+    {
+      "DeltaKhongBan": 0,
+      "DeltaThucTe": -1,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "XUAT_THANH_PHAM",
+      "MaBienDong": 7,
+      "MaCTPN": null,
+      "MaCTPX": 3,
+      "MaNV": 1,
+      "MaSP": 3,
+      "MaViTri": 2,
+      "MaViTriHienThi": "TP-A1",
+      "SKU": "PC-001",
+      "TenSP": "PC · 1 CPU + 2 RAM",
+      "ThoiDiem": "2026-10-11 10:34:59.084395"
+    },
+    {
+      "DeltaKhongBan": 1,
+      "DeltaThucTe": 1,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "NHAP_THANH_PHAM",
+      "MaBienDong": 6,
+      "MaCTPN": 4,
+      "MaCTPX": null,
+      "MaNV": 1,
+      "MaSP": 3,
+      "MaViTri": 3,
+      "MaViTriHienThi": "LOI-A1",
+      "SKU": "PC-001",
+      "TenSP": "PC · 1 CPU + 2 RAM",
+      "ThoiDiem": "2026-10-11 10:34:59.073276"
+    },
+    {
+      "DeltaKhongBan": 0,
+      "DeltaThucTe": 2,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "NHAP_THANH_PHAM",
+      "MaBienDong": 5,
+      "MaCTPN": 3,
+      "MaCTPX": null,
+      "MaNV": 1,
+      "MaSP": 3,
+      "MaViTri": 2,
+      "MaViTriHienThi": "TP-A1",
+      "SKU": "PC-001",
+      "TenSP": "PC · 1 CPU + 2 RAM",
+      "ThoiDiem": "2026-10-11 10:34:59.063868"
+    },
+    {
+      "DeltaKhongBan": 0,
+      "DeltaThucTe": -6,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "CAP_PHAT",
+      "MaBienDong": 4,
+      "MaCTPN": null,
+      "MaCTPX": 2,
+      "MaNV": 1,
+      "MaSP": 2,
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "SKU": "RAM-001",
+      "TenSP": "RAM",
+      "ThoiDiem": "2026-10-11 10:34:59.049894"
+    },
+    {
+      "DeltaKhongBan": 0,
+      "DeltaThucTe": -3,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "CAP_PHAT",
+      "MaBienDong": 3,
+      "MaCTPN": null,
+      "MaCTPX": 1,
+      "MaNV": 1,
+      "MaSP": 1,
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "SKU": "CPU-001",
+      "TenSP": "CPU",
+      "ThoiDiem": "2026-10-11 10:34:59.049019"
+    },
+    {
+      "DeltaKhongBan": 2,
+      "DeltaThucTe": 20,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "NHAP_NCC",
+      "MaBienDong": 2,
+      "MaCTPN": 2,
+      "MaCTPX": null,
+      "MaNV": 1,
+      "MaSP": 2,
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "SKU": "RAM-001",
+      "TenSP": "RAM",
+      "ThoiDiem": "2026-10-11 10:34:58.986032"
+    },
+    {
+      "DeltaKhongBan": 0,
+      "DeltaThucTe": 10,
+      "HoTen": "Quản lý kho",
+      "LoaiBienDong": "NHAP_NCC",
+      "MaBienDong": 1,
+      "MaCTPN": 1,
+      "MaCTPX": null,
+      "MaNV": 1,
+      "MaSP": 1,
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "SKU": "CPU-001",
+      "TenSP": "CPU",
+      "ThoiDiem": "2026-10-11 10:34:58.982625"
+    }
+  ],
+  "locations": [
+    {
+      "Ke": null,
+      "KhuVuc": "Nguyên liệu",
+      "MaViTri": 1,
+      "MaViTriHienThi": "LK-A1",
+      "Tang": null,
+      "TrangThai": "HOAT_DONG"
+    },
+    {
+      "Ke": null,
+      "KhuVuc": "Thành phẩm",
+      "MaViTri": 2,
+      "MaViTriHienThi": "TP-A1",
+      "Tang": null,
+      "TrangThai": "HOAT_DONG"
+    },
+    {
+      "Ke": null,
+      "KhuVuc": "Hàng lỗi",
+      "MaViTri": 3,
+      "MaViTriHienThi": "LOI-A1",
+      "Tang": null,
+      "TrangThai": "HOAT_DONG"
+    }
+  ],
+  "now": "2026-10-11 10:35:02",
+  "outgoing": [
+    {
+      "GhiChu": null,
+      "LoaiXuat": "THANH_PHAM",
+      "LyDoTuChoi": null,
+      "MaNVDuyet": 1,
+      "MaNVLap": 2,
+      "MaPX": 2,
+      "MaYCHieuLuc": null,
+      "MaYCLapRap": null,
+      "NgayDeNghi": "2026-10-11 10:34:59.076396",
+      "TenNguoiNhan": "Bo phan ban hang demo",
+      "ThoiDiemThucHien": "2026-10-11 10:34:59.084533",
+      "TrangThai": "DA_THUC_HIEN",
+      "lines": [
+        {
+          "MaCTPX": 3,
+          "MaPX": 2,
+          "MaSP": 3,
+          "MaViTri": 2,
+          "SoLuongXuat": 1
+        }
+      ]
+    },
+    {
+      "GhiChu": null,
+      "LoaiXuat": "CAP_PHAT",
+      "LyDoTuChoi": null,
+      "MaNVDuyet": 1,
+      "MaNVLap": 2,
+      "MaPX": 1,
+      "MaYCHieuLuc": 1,
+      "MaYCLapRap": 1,
+      "NgayDeNghi": "2026-10-11 10:34:59.024625",
+      "TenNguoiNhan": null,
+      "ThoiDiemThucHien": "2026-10-11 10:34:59.050290",
+      "TrangThai": "DA_THUC_HIEN",
+      "lines": [
+        {
+          "MaCTPX": 1,
+          "MaPX": 1,
+          "MaSP": 1,
+          "MaViTri": 1,
+          "SoLuongXuat": 3
+        },
+        {
+          "MaCTPX": 2,
+          "MaPX": 1,
+          "MaSP": 2,
+          "MaViTri": 1,
+          "SoLuongXuat": 6
+        }
+      ]
+    }
+  ],
+  "products": [
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "NGUYEN_LIEU",
+      "MaLoai": 1,
+      "MaSP": 1,
+      "MoTa": null,
+      "SKU": "CPU-001",
+      "TenSP": "CPU",
+      "TrangThai": "HOAT_DONG"
+    },
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "NGUYEN_LIEU",
+      "MaLoai": 1,
+      "MaSP": 2,
+      "MoTa": null,
+      "SKU": "RAM-001",
+      "TenSP": "RAM",
+      "TrangThai": "HOAT_DONG"
+    },
+    {
+      "DonViTinh": "cái",
+      "LoaiMatHang": "THANH_PHAM",
+      "MaLoai": 2,
+      "MaSP": 3,
+      "MoTa": null,
+      "SKU": "PC-001",
+      "TenSP": "PC · 1 CPU + 2 RAM",
+      "TrangThai": "HOAT_DONG"
+    }
+  ],
+  "results": [
+    {
+      "GhiChu": null,
+      "MaKQ": 2,
+      "MaNVLap": 2,
+      "MaNVTiepNhan": 1,
+      "MaViTriDat": null,
+      "MaViTriLoi": 3,
+      "MaYC": 1,
+      "SoLuongDat": 0,
+      "SoLuongLoi": 1,
+      "ThoiDiemTiepNhan": "2026-10-11 10:34:59.073582",
+      "TrangThai": "DA_TIEP_NHAN"
+    },
+    {
+      "GhiChu": null,
+      "MaKQ": 1,
+      "MaNVLap": 2,
+      "MaNVTiepNhan": 1,
+      "MaViTriDat": 2,
+      "MaViTriLoi": null,
+      "MaYC": 1,
+      "SoLuongDat": 2,
+      "SoLuongLoi": 0,
+      "ThoiDiemTiepNhan": "2026-10-11 10:34:59.064125",
+      "TrangThai": "DA_TIEP_NHAN"
+    }
+  ],
+  "suppliers": [
+    {
+      "DiaChi": null,
+      "MaNCC": 1,
+      "SoDienThoai": null,
+      "TenNCC": "Nhà cung cấp linh kiện",
+      "TrangThai": "HOAT_DONG"
+    }
+  ],
+  "user": {
+    "HoTen": "Quản trị viên",
+    "MaNV": 4,
+    "MaTK": 4,
+    "TenDangNhap": "admin",
+    "VaiTro": "ADMIN"
+  }
+}
