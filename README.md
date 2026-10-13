@@ -29,6 +29,8 @@ Chỉ chạy một bản ứng dụng trên hai cổng này. Khi đổi thư m�
 
 ## Nội dung repository
 
+Hướng dẫn chạy online trên Render với MySQL Aiven: [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md). Bản online dùng biến môi trường và TLS, giữ 17 bảng nghiệp vụ cùng database metadata riêng cho session/chống lưu trùng. Không dùng launcher Windows làm lệnh khởi động Render.
+
 - `app/`: backend, giao diện, script cài đặt, kiểm thử và hướng dẫn.
 - `docs/mrp/`: PRD, ERD, schema hiện hành, SQL dữ liệu ban đầu và hướng dẫn MRP. Schema gốc để đối chiếu nằm trong `docs/mrp/reference/`.
 - Hai launcher CMD và `.gitignore`.

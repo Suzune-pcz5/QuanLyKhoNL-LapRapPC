@@ -10,7 +10,24 @@ from flask.sessions import SessionInterface, SessionMixin
 from itsdangerous import BadSignature, URLSafeSerializer
 from werkzeug.datastructures import CallbackDict
 
-from db import RUNTIME
+from db import RUNTIME, connect
+
+
+MYSQL_STATE_SCHEMA = (
+    'CREATE TABLE sessions (sid VARCHAR(80) PRIMARY KEY, data TEXT NOT NULL, expires DOUBLE NOT NULL, version INT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin',
+    'CREATE TABLE operations (account INT NOT NULL, kind VARCHAR(16) NOT NULL, token VARCHAR(80) NOT NULL, fingerprint CHAR(64) NOT NULL, ident INT NOT NULL, completed TINYINT NOT NULL DEFAULT 0, PRIMARY KEY(account,kind,token)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin',
+)
+
+
+class MySQLConnection:
+    """Adapt fixed HTTP-metadata queries to the existing session-store interface."""
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, args=()):
+        cursor = self.connection.cursor()
+        cursor.execute(sql.replace('?', '%s'), args)
+        return cursor
 
 
 class WebState:
@@ -47,6 +64,30 @@ class WebState:
             c.execute('UPDATE operations SET completed=1 WHERE account=? AND kind=? AND token=?', (account, kind, token))
 
 
+class MySQLWebState(WebState):
+    """Hosted metadata uses a separate database, retaining the 17 business tables."""
+    def __init__(self, database):
+        self.database = database
+
+    @contextmanager
+    def connection(self):
+        c = connect(database=self.database)
+        try:
+            c.begin()
+            yield MySQLConnection(c)
+            c.commit()
+        except Exception:
+            c.rollback()
+            raise
+        finally:
+            c.close()
+
+    def reserve(self, account, kind, token, fingerprint, ident):
+        with self.connection() as c:
+            c.execute('INSERT INTO operations (account,kind,token,fingerprint,ident,completed) VALUES (?,?,?,?,?,0) '
+                      'ON DUPLICATE KEY UPDATE ident=?,completed=0', (account, kind, token, fingerprint, ident, ident))
+
+
 class ServerSession(CallbackDict, SessionMixin):
     def __init__(self, data=None, sid=None, version=None):
         super().__init__(data, lambda value: setattr(value, 'modified', True))
@@ -65,6 +106,8 @@ class ServerSessions(SessionInterface):
         return URLSafeSerializer(app.secret_key, salt=self.salt)
 
     def open_session(self, app, request):
+        if request.path == '/healthz':
+            return ServerSession()
         token = request.cookies.get(self.get_cookie_name(app))
         if token:
             try:

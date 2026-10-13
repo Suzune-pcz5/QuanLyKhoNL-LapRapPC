@@ -102,6 +102,10 @@ async function nav(page){w.location.hash=page;w.dispatchEvent(new w.HashChangeEv
  check(query('#toast').textContent==='Backup verification failed','Failed restore shows error');
  restoreFailure=false;click('#restore-test');await tick();query('#confirm-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();
  check(query('.backup-result')?.textContent.includes('Dữ liệu khớp với bản sao lưu'),'Successful restore retry renders verification');
+ vm.runInContext('S.data.capabilities={backup:false};render()',dom.getInternalVMContext());
+ check(!query('#backup-create')&&!query('#restore-test'),'Hosted backup controls are not exposed');
+ check(query('#content').textContent.includes('dịch vụ MySQL'),'Hosted backup uses provider guidance');
+ vm.runInContext('S.data.capabilities={backup:true}',dom.getInternalVMContext());
  await nav('accounts');check(!/demo/i.test(query('#workspace').textContent),'Account names are neutral');
  vm.runInContext("S.user.VaiTro='NHAN_VIEN'",dom.getInternalVMContext());await nav('overview');check(!query('[data-nav="report"]')&&!query('[data-nav="accounts"]'),'Employee navigation restricted');
  check(errors.length===0,'No JavaScript errors: '+errors.join(';'));

@@ -1,5 +1,18 @@
 # Kết quả kiểm thử
 
+## Sửa triển khai Render — 13/10/2026
+
+- Sửa import phụ thuộc `LOCALAPPDATA`, giữ cấu hình Windows local và bổ sung cấu hình MySQL online qua environment. Không khởi tạo/migrate DB khi web khởi động.
+- Kiểm tra import trong process không có `LOCALAPPDATA`; cấu hình thiếu/không hợp lệ báo đúng tên biến, không lộ giá trị. TLS kiểm tra chứng chỉ/hostname; HTTPS origin và Secure cookie được kiểm chứng.
+- **47 test Python khác nhau đạt**: 46 test trong lượt kết hợp (15 config, 3 metadata MySQL, 22 nghiệp vụ, 6 lifecycle), sau đó bổ sung và kiểm tra lại test export loại credential quản trị, tổng nhóm config là 16.
+- **279 kiểm tra DOM đạt**: 94 giao diện chung, 37 PRD, 42 audit, 62 session, 44 recovery. Bao gồm 2 kiểm tra mới cho trạng thái sao lưu của bản online.
+- Session/idempotency cloud được kiểm chứng bằng MySQL thật ở DB tạm: tồn tại khi tạo app instance mới; lặp lưu trả cùng ID; logout không bị response cũ phục hồi; rollback metadata và phân biệt hoa/thường của token đúng. Các DB/quyền test được dọn.
+- Kết nối thực tế tới dịch vụ Aiven của người dùng bằng CA đã cung cấp thành công, MySQL **8.4.11**. Trước khởi tạo, DB nghiệp vụ và metadata không có đối tượng. Sau khởi tạo: 17 bảng nghiệp vụ và 2 bảng metadata ở database riêng.
+- Tài khoản MySQL hạn chế trên Aiven đã chạy API đăng nhập của cả bốn vai trò, đọc tồn và báo cáo thành công. UPDATE trực tiếp tồn/trạng thái và DELETE ledger bị từ chối.
+- Credential, CA và file environment thực tế giữ ngoài repository. File export cho Render không chứa credential quản trị Aiven hoặc mật khẩu tài khoản web ban đầu.
+
+Đây là kiểm chứng code và kết nối Aiven. Chưa xác nhận service Render Live; cần đưa commit lên branch triển khai, nhập environment/CA vào Render rồi deploy. `/healthz` chỉ xác nhận tiến trình, không thay thế kiểm tra đăng nhập và dữ liệu.
+
 Ngày rà soát đầy đủ: **11/10/2026**, UTC+7. Môi trường: Windows, Python 3.14.5, MySQL 8.4.11 và Microsoft Edge thật.
 
 ## Đối chiếu PRD — 12/10/2026

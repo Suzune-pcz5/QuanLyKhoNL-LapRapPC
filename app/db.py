@@ -1,29 +1,34 @@
 """MySQL connections and the authoritative, delimiter-aware SQL loader."""
-import json
-import os
 import re
+import ssl
 from pathlib import Path
 
 import pymysql
+from config import ConfigurationError, RUNTIME, settings
 
 BASE = Path(__file__).resolve().parent
 ROOT = BASE.parent
-RUNTIME = Path(os.environ.get('MRP_RUNTIME', str(Path(os.environ['LOCALAPPDATA']) / 'HTTTDN-Demo')))
-
-
-def settings():
-    return json.loads((RUNTIME / 'runtime.json').read_text(encoding='utf-8'))
-
-
 def connect(admin=False, database=None):
     x = settings()
+    extra = {}
+    if x.get('external'):
+        if admin and not (x.get('admin_user') and x.get('admin_password')):
+            raise ConfigurationError('Use MYSQL_ADMIN_USER and MYSQL_ADMIN_PASSWORD only for explicit cloud initialization.')
+        try:
+            extra['ssl'] = ssl.create_default_context(cafile=x.get('ssl_ca'))
+        except (OSError, ssl.SSLError):
+            raise ConfigurationError('MYSQL_SSL_CA could not be loaded. Supply the provider CA certificate; TLS verification remains required.') from None
+        user = x['admin_user'] if admin else x['user']
+        password = x['admin_password'] if admin else x['password']
+    else:
+        user, password = ('root', x['root_password']) if admin else (x['user'], x['password'])
     return pymysql.connect(
-        host=x['host'], port=x['port'], user='root' if admin else x['user'],
-        password=x['root_password'] if admin else x['password'],
+        host=x['host'], port=x['port'], user=user, password=password,
         database=database if database is not None else x['database'],
         charset='utf8mb4', autocommit=True, cursorclass=pymysql.cursors.DictCursor,
         connect_timeout=5, read_timeout=30, write_timeout=30,
         init_command="SET time_zone='+07:00',sql_mode='STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+        **extra,
     )
 
 

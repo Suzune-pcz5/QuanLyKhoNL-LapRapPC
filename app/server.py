@@ -18,7 +18,7 @@ from waitress import serve
 
 from db import BASE, call, connect, execute, insert, one, rows, settings, update
 from messages import FIELDS, TABLES, SQL_ERRORS
-from web_state import WebState, ServerSessions
+from web_state import WebState, MySQLWebState, ServerSessions
 
 MANAGER = 'QUAN_LY_KHO'
 EMPLOYEE = 'NHAN_VIEN'
@@ -128,9 +128,10 @@ def create_app(test_config=None):
     x = settings()
     app.config.update(SECRET_KEY=x['secret_key'], SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict',
                       PERMANENT_SESSION_LIFETIME=timedelta(hours=8), SESSION_REFRESH_EACH_REQUEST=False, MAX_CONTENT_LENGTH=512*1024,
-                      DATABASE=x['database'], TESTING=False)
+                      DATABASE=x['database'], TESTING=False, SESSION_COOKIE_SECURE=x.get('external', False),
+                      APP_ORIGIN=x.get('app_origin'), BACKUPS_ENABLED=x.get('backups_enabled', True))
     if test_config: app.config.update(test_config)
-    web_state = WebState(app.config['DATABASE'])
+    web_state = MySQLWebState(x['state_database']) if x.get('external') else WebState(app.config['DATABASE'])
     app.session_interface = ServerSessions(web_state, app.config['DATABASE'])
     rate = {}
     rate_lock = threading.Lock()
@@ -142,7 +143,8 @@ def create_app(test_config=None):
             return
         if request.method not in ('GET', 'HEAD', 'OPTIONS'):
             origin = request.headers.get('Origin')
-            need(not origin or origin == request.host_url.rstrip('/'), 'Nguồn yêu cầu không hợp lệ.', 403)
+            expected_origin = app.config['APP_ORIGIN'] or request.host_url.rstrip('/')
+            need(not origin or origin == expected_origin, 'Nguồn yêu cầu không hợp lệ.', 403)
             need(secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), session.get('csrf', '?')), 'Phiên thao tác hết hạn. Tải lại trang.', 403)
         if request.path in ('/api/session', '/api/login'):
             return
@@ -230,6 +232,11 @@ def create_app(test_config=None):
     @app.get('/')
     def home(): return send_from_directory(BASE / 'static', 'index.html')
 
+    @app.get('/healthz')
+    def health():
+        # Liveness only: never initialize a database or disclose connection settings.
+        return jsonify(status='ok')
+
     @app.get('/api/session')
     def current_session():
         session.setdefault('csrf', secrets.token_urlsafe(32))
@@ -273,7 +280,8 @@ def create_app(test_config=None):
     @app.get('/api/state')
     def state():
         c, u = g.c, g.user
-        result = {'user': public_user(u), 'database': 'MySQL 8.4 · 17 bảng', 'now': one(c, 'SELECT NOW() n')['n']}
+        result = {'user': public_user(u), 'database': 'MySQL · 17 bảng', 'now': one(c, 'SELECT NOW() n')['n'],
+                  'capabilities': {'backup': app.config['BACKUPS_ENABLED']}}
         for name, (table, key, _fields) in CATALOGS.items():
             result[name] = rows(c, f'SELECT * FROM {table} ORDER BY {key}')
         result['employees'] = rows(c, 'SELECT n.*,t.MaTK,t.VaiTro,t.TrangThai TaiKhoanTrangThai FROM NHAN_VIEN n LEFT JOIN TAI_KHOAN t ON t.MaNV=n.MaNV ORDER BY MaNV')
@@ -556,6 +564,7 @@ def create_app(test_config=None):
     @app.post('/api/backup')
     def backup_route():
         role(ADMIN)
+        need(app.config['BACKUPS_ENABLED'], 'Bản online sử dụng công cụ sao lưu của dịch vụ MySQL.', 409)
         from manage import backup
         need(backup_lock.acquire(blocking=False), 'Đang có tác vụ sao lưu/khôi phục.',409)
         try: name = backup()
@@ -564,12 +573,14 @@ def create_app(test_config=None):
 
     @app.get('/api/backups/<name>')
     def download_backup(name):
-        role(ADMIN); need(name.startswith('mrp_') and name.endswith('.sql'),'Tên backup không hợp lệ.')
+        role(ADMIN); need(app.config['BACKUPS_ENABLED'], 'Bản online sử dụng công cụ sao lưu của dịch vụ MySQL.', 409)
+        need(name.startswith('mrp_') and name.endswith('.sql'),'Tên backup không hợp lệ.')
         return send_from_directory(BASE/'backups',name,as_attachment=True)
 
     @app.post('/api/restore-test')
     def restore_route():
         role(ADMIN)
+        need(app.config['BACKUPS_ENABLED'], 'Bản online sử dụng công cụ khôi phục của dịch vụ MySQL.', 409)
         from manage import BackupVerificationError, verify_restore
         need(backup_lock.acquire(blocking=False),'Đang có tác vụ sao lưu/khôi phục.',409)
         try: result=verify_restore(text(body().get('file'), 'Tên backup', 255, True))

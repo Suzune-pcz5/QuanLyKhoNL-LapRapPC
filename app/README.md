@@ -4,6 +4,8 @@
 
 ## Chạy trên máy này
 
+Chạy trên Render/Linux: xem [hướng dẫn triển khai](../docs/DEPLOY_RENDER.md). Cấu hình MySQL được đọc từ biến môi trường; bản local tiếp tục dùng `runtime.json` và runtime hiện có.
+
 Nhấp đúp [`start-demo.cmd`](../start-demo.cmd), hoặc chạy từ thư mục project:
 
 ```powershell

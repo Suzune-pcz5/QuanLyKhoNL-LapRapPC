@@ -11,6 +11,7 @@ import time
 import webbrowser
 from datetime import datetime
 from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
 
 import pymysql
@@ -19,6 +20,7 @@ from werkzeug.security import generate_password_hash
 from db import BASE, ROOT, RUNTIME, call, connect, execute, insert, one, rows, run_sql, settings
 from seed_labels import normalize_seed_labels
 from migrations import upgrade_stock_diagnostics, upgrade_frozen_notes, upgrade_frozen_headers, normalize_unit_labels
+from config import external_configured
 
 MYSQL = RUNTIME / 'mysql-8.4.11-winx64'
 SCHEMA = ROOT / 'docs/mrp/schema_MRP_HTTTDN_17_bang.sql'
@@ -33,6 +35,15 @@ TEMP_DATABASE = re.compile(r'mrp_(?:(?:test|ui)_[0-9a-f]{12}|restore_\d{8}_\d{6}
 
 class BackupVerificationError(RuntimeError):
     pass
+
+
+def local_only(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        if os.name != 'nt' or external_configured():
+            raise RuntimeError('This command manages the local Windows runtime only. Use cloud_setup.py for hosted MySQL.')
+        return function(*args, **kwargs)
+    return checked
 
 
 def database_snapshot(c, database):
@@ -102,6 +113,7 @@ def port_open(port):
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
+@local_only
 def start_mysql():
     RUNTIME.mkdir(parents=True, exist_ok=True)
     data = RUNTIME / 'mysql-data'
@@ -133,13 +145,14 @@ def start_mysql():
                                        database='htttdn_mrp_demo', user='mrp_app')), encoding='utf-8')
 
 
-def grant_app(c, database):
+def grant_app(c, database, host='localhost', create_account=True):
     if not database.replace('_', '').isalnum():
         raise ValueError('Invalid database name')
     x = settings()
-    execute(c, "CREATE USER IF NOT EXISTS %s@'localhost' IDENTIFIED BY %s", (x['user'], x['password']))
-    execute(c, "ALTER USER %s@'localhost' IDENTIFIED BY %s", (x['user'], x['password']))
-    who = "'" + x['user'] + "'@'localhost'"
+    if create_account:
+        execute(c, 'CREATE USER IF NOT EXISTS %s@%s IDENTIFIED BY %s', (x['user'], host, x['password']))
+        execute(c, 'ALTER USER %s@%s IDENTIFIED BY %s', (x['user'], host, x['password']))
+    who = (c.escape(x['user']) + '@' + c.escape(host)).replace('%', '%%')
     execute(c, f'GRANT SELECT ON `{database}`.* TO {who}')
     for table in DRAFTS + CATALOGS:
         execute(c, f'GRANT INSERT, DELETE ON `{database}`.{table} TO {who}')
@@ -208,6 +221,7 @@ def drop_temporary_database(c, database):
     return revoke_temporary_grants(c, database)
 
 
+@local_only
 def cleanup_test_grants():
     """Keep all live schemas and the main database; remove only stale test grants."""
     c = connect(admin=True)
@@ -225,6 +239,7 @@ def cleanup_test_grants():
         c.close()
 
 
+@local_only
 def initialize(database=None):
     start_mysql()
     x = settings()
@@ -252,6 +267,7 @@ def initialize(database=None):
     return database
 
 
+@local_only
 def migrate():
     """Run with the backend stopped: upgrade routines/triggers and exact seed labels."""
     c = connect(admin=True)
@@ -264,6 +280,7 @@ def migrate():
         c.close()
 
 
+@local_only
 def backup():
     x = settings()
     folder = BASE / 'backups'
@@ -294,6 +311,7 @@ def backup():
     return name
 
 
+@local_only
 def verify_restore(name):
     path = BASE / 'backups' / name
     if Path(name).name != name or not path.is_file() or not name.endswith('.sql'):
@@ -357,6 +375,7 @@ def show_address():
         webbrowser.open('http://127.0.0.1:8765')
 
 
+@local_only
 def start():
     state = backend_state()
     owned = {p['pid'] for p in state['processes']}
@@ -387,6 +406,7 @@ def start():
     raise RuntimeError('Backend chua san sang. Xem server.log.')
 
 
+@local_only
 def stop():
     # Match exact script arguments and stop both the venv launcher and its Python child.
     pid_file = RUNTIME / 'server.pid'
