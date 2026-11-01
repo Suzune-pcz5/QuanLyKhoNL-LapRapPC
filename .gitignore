@@ -12,3 +12,4 @@ runtime.json
 .venv/
 venv/
 node_modules/
+.local/
