@@ -3,28 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HTTTDN · Quản lý dữ liệu bán hàng</title>
+  <title>Quản lý cửa hàng</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <section id="login-screen">
     <div class="login-card">
-      <div class="mark">H</div>
-      <h1>HTTTDN</h1>
-      <p>Quản lý dữ liệu bán hàng · ERD 18 bảng</p>
+      <div class="mark">CH</div>
+      <h1>Quản lý cửa hàng</h1>
+      <p>Quản lý sản phẩm, bán hàng và kho</p>
       <form id="login-form">
-        <label>Mã tài khoản (UserID)<input type="number" name="userID" min="1" required autofocus value="1"></label>
+        <label>Tài khoản<input type="text" name="userID" autocomplete="username" placeholder="admin hoặc mã tài khoản" required autofocus></label>
         <label>Mật khẩu<input type="password" name="password" autocomplete="current-password" required></label>
         <button type="submit" class="primary">Đăng nhập</button>
       </form>
-      <p class="hint">Nhập mã tài khoản và mật khẩu được quản trị viên cấp.</p>
+      <p class="hint">Nhập tài khoản và mật khẩu được quản trị viên cấp.</p>
       <p id="login-error" class="error" role="alert"></p>
     </div>
   </section>
   <div id="app" hidden>
     <aside>
-      <div class="brand"><span class="mark">H</span><div><strong>HTTTDN</strong><small>QUẢN LÝ DỮ LIỆU</small></div></div>
+      <div class="brand"><span class="mark">CH</span><div><strong>Quản lý cửa hàng</strong><small>SẢN PHẨM · BÁN HÀNG · KHO</small></div></div>
       <button class="nav-item selected" data-table="">◈ &nbsp; Tổng quan</button>
       <div class="nav-caption">TÀI KHOẢN & NGƯỜI DÙNG</div>
       <div id="group-users"></div>

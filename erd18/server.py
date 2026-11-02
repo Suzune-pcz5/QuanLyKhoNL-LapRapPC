@@ -157,15 +157,25 @@ def create_app(test_config=None):
     @app.post('/api/login')
     def login():
         body = request.get_json(silent=True) or {}
-        try:
-            uid = int(body.get('userID', 0))
-        except (ValueError, TypeError):
-            raise Problem('UserID phải là số.')
+        require(isinstance(body, dict), 'Dữ liệu đăng nhập không hợp lệ.')
+        account = body.get('userID', '')
+        require(isinstance(account, (str, int)) and not isinstance(account, bool),
+                'Sai tài khoản hoặc mật khẩu.', 401)
+        account = str(account).strip()
+        admin_alias = account.casefold() == 'admin'
+        if admin_alias:
+            uid = 1
+        else:
+            require(account.isascii() and account.isdecimal() and len(account) <= 10,
+                    'Sai tài khoản hoặc mật khẩu.', 401)
+            uid = int(account)
+            require(0 < uid <= 2147483647, 'Sai tài khoản hoặc mật khẩu.', 401)
         password = body.get('password', '')
         require(isinstance(password, str), 'Mật khẩu không hợp lệ.')
         user = one(g.c, 'SELECT * FROM `User` WHERE UserID=%s', (uid,))
-        require(bool(user) and check_password_hash(user['pass'], password),
-                'Sai mã tài khoản hoặc mật khẩu.', 401)
+        require(bool(user) and (not admin_alias or user['role'] == 'ADMIN')
+                and check_password_hash(user['pass'], password),
+                'Sai tài khoản hoặc mật khẩu.', 401)
         session.clear()
         session['uid'] = uid
         session['fingerprint'] = hashlib.sha256(user['pass'].encode()).hexdigest()
