@@ -18,6 +18,30 @@ TABLES = ('User', 'NV', 'KH', 'LoaiSP', 'SP', 'NCC', 'PNH', 'CTPNH',
           'VI_TRI_KHO', 'TON_KHO', 'HD', 'CTHD', 'KIEM_KE', 'CT_KIEM_KE',
           'CTKM', 'KMTheoHD', 'KMTheoVoucher', 'KMTheoSP')
 CUSTOMER_READ = frozenset({'LoaiSP', 'SP'})
+WAREHOUSE_TABLES = frozenset({'VI_TRI_KHO', 'TON_KHO', 'KIEM_KE', 'CT_KIEM_KE'})
+# Named logins reference the existing ERD keys; no extra database columns.
+LOGIN_ALIASES = {'admin': (1, 'ADMIN'), 'admincnpm': (2, 'ADMIN_CNPM'),
+                 'nhanvien': (3, 'NHAN_VIEN')}
+
+
+def readable_tables(user):
+    if not user:
+        return ()
+    if user['LoaiUser'] == 'KH':
+        return tuple(t for t in TABLES if t in CUSTOMER_READ)
+    if user['role'] == 'ADMIN_CNPM':
+        return tuple(t for t in TABLES if t not in WAREHOUSE_TABLES)
+    return TABLES
+
+
+def writable_tables(user):
+    if not user or user['LoaiUser'] != 'NV':
+        return ()
+    if user['role'] == 'ADMIN':
+        return TABLES
+    if user['role'] in ('ADMIN_CNPM', 'NHAN_VIEN'):
+        return tuple(t for t in readable_tables(user) if t != 'User')
+    return ()
 
 
 class ProxyAwareSessionInterface(SecureCookieSessionInterface):
@@ -72,7 +96,9 @@ def current_user(c):
 def public_user(u):
     if u is None:
         return None
-    return {key: u[key] for key in ('UserID', 'role', 'LoaiUser', 'MaThamChieu', 'HoTen')}
+    result = {key: u[key] for key in ('UserID', 'role', 'LoaiUser', 'MaThamChieu', 'HoTen')}
+    result['permissions'] = {'read': readable_tables(u), 'write': writable_tables(u)}
+    return result
 
 
 def table_columns(c, dbname, table):
@@ -162,9 +188,9 @@ def create_app(test_config=None):
         require(isinstance(account, (str, int)) and not isinstance(account, bool),
                 'Sai tài khoản hoặc mật khẩu.', 401)
         account = str(account).strip()
-        admin_alias = account.casefold() == 'admin'
-        if admin_alias:
-            uid = 1
+        alias = LOGIN_ALIASES.get(account.casefold())
+        if alias:
+            uid = alias[0]
         else:
             require(account.isascii() and account.isdecimal() and len(account) <= 10,
                     'Sai tài khoản hoặc mật khẩu.', 401)
@@ -173,7 +199,8 @@ def create_app(test_config=None):
         password = body.get('password', '')
         require(isinstance(password, str), 'Mật khẩu không hợp lệ.')
         user = one(g.c, 'SELECT * FROM `User` WHERE UserID=%s', (uid,))
-        require(bool(user) and (not admin_alias or user['role'] == 'ADMIN')
+        require(bool(user) and (not alias or
+                (user['role'] == alias[1] and user['LoaiUser'] == 'NV'))
                 and check_password_hash(user['pass'], password),
                 'Sai tài khoản hoặc mật khẩu.', 401)
         session.clear()
@@ -193,17 +220,14 @@ def create_app(test_config=None):
     def authorized(table, write=False):
         require(table in TABLES, 'Không có bảng này.', 404)
         require(g.user is not None, 'Bạn chưa đăng nhập.', 401)
-        if g.user['LoaiUser'] == 'KH':
-            require(not write and table in CUSTOMER_READ, 'Không có quyền.', 403)
+        require(table in readable_tables(g.user), 'Không có quyền truy cập phần này.', 403)
         if write:
-            require(g.user['role'] == 'ADMIN' or
-                    (g.user['role'] == 'NHAN_VIEN' and table != 'User'),
-                    'Chỉ quản trị viên được sửa tài khoản.', 403)
+            require(table in writable_tables(g.user), 'Không có quyền sửa dữ liệu này.', 403)
 
     @app.get('/api/schema')
     def schema():
         require(g.user is not None, 'Bạn chưa đăng nhập.', 401)
-        available = CUSTOMER_READ if g.user['LoaiUser'] == 'KH' else TABLES
+        available = readable_tables(g.user)
         return jsonify(tables={table: table_columns(g.c, app.config['DATABASE'], table)
                                for table in TABLES if table in available})
 
@@ -241,7 +265,7 @@ def create_app(test_config=None):
                         'Mật khẩu cần ít nhất 8 ký tự.')
                 result['pass'] = generate_password_hash(result['pass'])
             if 'role' in result:
-                require(result['role'] in ('ADMIN', 'NHAN_VIEN', 'KHACH_HANG', 'CHI_XEM'),
+                require(result['role'] in ('ADMIN', 'ADMIN_CNPM', 'NHAN_VIEN', 'KHACH_HANG', 'CHI_XEM'),
                         'Vai trò không hợp lệ.')
         return result
 
@@ -294,7 +318,7 @@ def create_app(test_config=None):
         if g.user['LoaiUser'] == 'KH':
             return jsonify(products=one(g.c, 'SELECT COUNT(*) AS n FROM SP')['n'])
         result = {}
-        for table in TABLES:
+        for table in readable_tables(g.user):
             result[table] = one(g.c, f'SELECT COUNT(*) AS n FROM `{table}`')['n']
         return jsonify(result)
 

@@ -14,7 +14,7 @@ const names = {
 };
 let csrf = '', user = null, columns = {}, activeTable = '', currentRows = [], editing = null;
 const $ = id => document.getElementById(id);
-function canWrite(table){ return !!user && (user.role==='ADMIN' || (user.role==='NHAN_VIEN' && table!=='User')); }
+function canWrite(table){ return !!user?.permissions?.write?.includes(table); }
 function escapeHtml(s) {return String(s ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));}
 async function api(url, opts = {}) {
   const response = await fetch(url, {...opts, headers:{'Content-Type':'application/json','X-CSRF-Token':csrf,...(opts.headers||{})}});
@@ -33,6 +33,8 @@ async function boot(){
 async function enter(){
   $('login-screen').hidden=true;$('app').hidden=false;
   $('current-user').textContent=`${user.HoTen} · ${user.role}`;
+  $('brand-sections').textContent=user.role==='ADMIN_CNPM'?'SẢN PHẨM · BÁN HÀNG':'SẢN PHẨM · BÁN HÀNG · KHO';
+  $('caption-products').textContent=user.role==='ADMIN_CNPM'?'SẢN PHẨM':'SẢN PHẨM & KHO';
   const result=await api('/api/schema');columns=result.tables;
   for (const [group,tables] of Object.entries(groups)){
     const el=$('group-'+group);el.innerHTML='';
@@ -41,6 +43,8 @@ async function enter(){
       btn.dataset.table=table;btn.textContent=names[table]||table;
       el.appendChild(btn);
     }
+    el.hidden=!el.children.length;
+    el.previousElementSibling.hidden=el.hidden;
   }
   await choose('');
 }
@@ -48,12 +52,12 @@ async function choose(table){
   activeTable=table;message('');
   document.querySelectorAll('[data-table]').forEach(el=>el.classList.toggle('selected',el.dataset.table===table));
   $('page-title').textContent=table?names[table]||table:'Tổng quan';
-  $('page-subtitle').textContent=table?`Bảng ${table} · Dữ liệu trong MySQL`:'18 bảng theo sơ đồ ERD mới';
+  $('page-subtitle').textContent=table?`Bảng ${table} · Dữ liệu trong MySQL`:'Các mục quản lý được cấp quyền';
   $('add-btn').hidden=!table || !canWrite(table);
   if (!table){
     const data=await api('/api/overview');
     const cards=Object.entries('products' in data?{SP:data.products}:data).map(([key,n])=>`<div class="card stat">${escapeHtml(names[key]||key)}<strong>${n}</strong></div>`).join('');
-    $('main-content').innerHTML=`<div class="stats">${cards}</div><h2 class="section-title">Cơ sở dữ liệu mới</h2><div class="card">Các nhóm tài khoản, sản phẩm, nhập hàng, bán hàng, kho, kiểm kê và khuyến mãi đã được tạo đúng theo ERD. Chọn bảng bên trái để xem và quản lý bản ghi.</div>`;
+    $('main-content').innerHTML=`<div class="stats">${cards}</div><h2 class="section-title">Quản lý cửa hàng</h2><div class="card">Chọn mục bên trái để xem và quản lý dữ liệu theo quyền của tài khoản.</div>`;
     return;
   }
   try {

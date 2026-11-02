@@ -14,7 +14,7 @@
       <h1>Quản lý cửa hàng</h1>
       <p>Quản lý sản phẩm, bán hàng và kho</p>
       <form id="login-form">
-        <label>Tài khoản<input type="text" name="userID" autocomplete="username" placeholder="admin hoặc mã tài khoản" required autofocus></label>
+        <label>Tài khoản<input type="text" name="userID" autocomplete="username" placeholder="Tên tài khoản hoặc mã tài khoản" required autofocus></label>
         <label>Mật khẩu<input type="password" name="password" autocomplete="current-password" required></label>
         <button type="submit" class="primary">Đăng nhập</button>
       </form>
@@ -24,11 +24,11 @@
   </section>
   <div id="app" hidden>
     <aside>
-      <div class="brand"><span class="mark">CH</span><div><strong>Quản lý cửa hàng</strong><small>SẢN PHẨM · BÁN HÀNG · KHO</small></div></div>
+      <div class="brand"><span class="mark">CH</span><div><strong>Quản lý cửa hàng</strong><small id="brand-sections">SẢN PHẨM · BÁN HÀNG · KHO</small></div></div>
       <button class="nav-item selected" data-table="">◈ &nbsp; Tổng quan</button>
       <div class="nav-caption">TÀI KHOẢN & NGƯỜI DÙNG</div>
       <div id="group-users"></div>
-      <div class="nav-caption">SẢN PHẨM & KHO</div>
+      <div class="nav-caption" id="caption-products">SẢN PHẨM & KHO</div>
       <div id="group-products"></div>
       <div class="nav-caption">NHẬP & BÁN HÀNG</div>
       <div id="group-documents"></div>
