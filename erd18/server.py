@@ -177,7 +177,8 @@ def create_app(test_config=None):
     @app.post('/api/logout')
     def logout():
         session.clear()
-        return jsonify(ok=True)
+        session['csrf'] = secrets.token_urlsafe(24)
+        return jsonify(ok=True, csrf=session['csrf'])
 
     def authorized(table, write=False):
         require(table in TABLES, 'Không có bảng này.', 404)

@@ -52,7 +52,7 @@ async function choose(table){
   $('add-btn').hidden=!table || !canWrite(table);
   if (!table){
     const data=await api('/api/overview');
-    const cards=Object.entries(data.result||{SP:data.products}).map(([key,n])=>`<div class="card stat">${escapeHtml(names[key]||key)}<strong>${n}</strong></div>`).join('');
+    const cards=Object.entries('products' in data?{SP:data.products}:data).map(([key,n])=>`<div class="card stat">${escapeHtml(names[key]||key)}<strong>${n}</strong></div>`).join('');
     $('main-content').innerHTML=`<div class="stats">${cards}</div><h2 class="section-title">Cơ sở dữ liệu mới</h2><div class="card">Các nhóm tài khoản, sản phẩm, nhập hàng, bán hàng, kho, kiểm kê và khuyến mãi đã được tạo đúng theo ERD. Chọn bảng bên trái để xem và quản lý bản ghi.</div>`;
     return;
   }
@@ -147,5 +147,5 @@ $('app').addEventListener('click',e=>{const el=e.target.closest('[data-table]');
 $('add-btn').onclick=()=>openForm();
 $('close-dialog').onclick=closeForm;
 $('cancel-dialog').onclick=closeForm;
-$('logout-btn').onclick=async()=>{try{await api('/api/logout',{method:'POST'});}finally{user=null;csrf='';showLogin();}};
+$('logout-btn').onclick=async()=>{try{const result=await api('/api/logout',{method:'POST'});user=null;csrf=result.csrf;showLogin();}catch(e){message(e.message,true);}};
 boot();
