@@ -76,6 +76,7 @@ function renderTable(table,data,count){
       for(const col of cols){const td=tr.insertCell();td.textContent=String(row[col.name]??'—');td.title=td.textContent;}
       if(canWrite(table)){
         const td=tr.insertCell();const wrap=document.createElement('div');wrap.className='table-actions';
+        if(table==='User' && user.role==='ADMIN_CNPM' && (Number(row.UserID)===1 || row.role==='ADMIN')){td.textContent='Admin toàn quyền';continue;}
         const edit=document.createElement('button');edit.textContent='Sửa';edit.onclick=()=>openForm(row);
         const del=document.createElement('button');del.textContent='Xóa';del.className='danger';del.onclick=()=>removeRow(row);
         wrap.append(edit,del);td.appendChild(wrap);

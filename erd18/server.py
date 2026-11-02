@@ -37,9 +37,9 @@ def readable_tables(user):
 def writable_tables(user):
     if not user or user['LoaiUser'] != 'NV':
         return ()
-    if user['role'] == 'ADMIN':
-        return TABLES
-    if user['role'] in ('ADMIN_CNPM', 'NHAN_VIEN'):
+    if user['role'] in ('ADMIN', 'ADMIN_CNPM'):
+        return readable_tables(user)
+    if user['role'] == 'NHAN_VIEN':
         return tuple(t for t in readable_tables(user) if t != 'User')
     return ()
 
@@ -260,6 +260,12 @@ def create_app(test_config=None):
                 'Giá trị không hợp lệ.')
         result = dict(values)
         if table == 'User':
+            if g.user['role'] == 'ADMIN_CNPM':
+                require(result.get('role') != 'ADMIN',
+                        'Chỉ admin chính được cấp quyền admin toàn quyền.', 403)
+                if 'UserID' in result:
+                    require(valid_user_id(result['UserID']) != 1,
+                            'Không được thay đổi tài khoản admin chính.', 403)
             if 'pass' in result:
                 require(isinstance(result['pass'], str) and len(result['pass']) >= 8,
                         'Mật khẩu cần ít nhất 8 ký tự.')
@@ -269,12 +275,34 @@ def create_app(test_config=None):
                         'Vai trò không hợp lệ.')
         return result
 
+    def valid_user_id(value):
+        require(isinstance(value, (str, int)) and not isinstance(value, bool),
+                'Mã tài khoản không hợp lệ.')
+        value = str(value).strip()
+        require(value.isascii() and value.isdecimal() and len(value) <= 10,
+                'Mã tài khoản không hợp lệ.')
+        ident = int(value)
+        require(0 < ident <= 2147483647, 'Mã tài khoản không hợp lệ.')
+        return ident
+
+    def protect_admin_account(ident):
+        if g.user['role'] != 'ADMIN_CNPM':
+            return
+        # Keep the checked role locked until the following mutation commits.
+        g.c.begin()
+        account = one(g.c, 'SELECT UserID, `role` FROM `User` WHERE UserID=%s FOR UPDATE', (ident,))
+        require(account is not None, 'Không tìm thấy tài khoản.', 404)
+        require(account['UserID'] != 1 and account['role'] != 'ADMIN',
+                'Không được thay đổi tài khoản admin toàn quyền.', 403)
+
     def key_condition(table, body):
         meta = table_columns(g.c, app.config['DATABASE'], table)
         keys = [c['name'] for c in meta if c['column_key'] == 'PRI']
         key_data = body.get('key')
         require(isinstance(key_data, dict) and keys and set(key_data) == set(keys),
                 'Thiếu khóa chính.')
+        if table == 'User':
+            key_data['UserID'] = valid_user_id(key_data['UserID'])
         return ' AND '.join(f'`{k}`=%s' for k in keys), [key_data[k] for k in keys]
 
     @app.post('/api/data/<table>')
@@ -296,9 +324,13 @@ def create_app(test_config=None):
         values = clean_values(table, body.get('values', {}), edit=True)
         if table == 'User' and body['key']['UserID'] == g.user['UserID'] and 'role' in values:
             require(values['role'] == g.user['role'], 'Không thể tự đổi vai trò.')
+        if table == 'User':
+            protect_admin_account(body['key']['UserID'])
         execute(g.c, f'UPDATE `{table}` SET ' +
                 ','.join(f'`{k}`=%s' for k in values) + ' WHERE ' + condition,
                 tuple(values.values()) + tuple(args))
+        if table == 'User' and g.user['role'] == 'ADMIN_CNPM':
+            g.c.commit()
         return jsonify(ok=True)
 
     @app.delete('/api/data/<table>')
@@ -309,7 +341,10 @@ def create_app(test_config=None):
         if table == 'User':
             require(body['key']['UserID'] != g.user['UserID'],
                     'Không thể xóa tài khoản đang đăng nhập.')
+            protect_admin_account(body['key']['UserID'])
         execute(g.c, f'DELETE FROM `{table}` WHERE {condition}', tuple(args))
+        if table == 'User' and g.user['role'] == 'ADMIN_CNPM':
+            g.c.commit()
         return jsonify(ok=True)
 
     @app.get('/api/overview')
