@@ -112,6 +112,27 @@ def table_columns(c, dbname, table):
     """, (dbname, table))
 
 
+def all_table_columns(c, dbname, tables):
+    result = {table: [] for table in tables}
+    if not tables:
+        return result
+    canonical = {table.casefold(): table for table in tables}
+    placeholders = ','.join(['%s'] * len(tables))
+    records = rows(c, f"""
+        SELECT TABLE_NAME AS table_name, COLUMN_NAME AS name, DATA_TYPE AS data_type,
+               COLUMN_TYPE AS column_type, IS_NULLABLE AS nullable,
+               COLUMN_DEFAULT AS default_value, COLUMN_KEY AS column_key, EXTRA AS extra
+        FROM information_schema.columns
+        WHERE TABLE_SCHEMA=%s AND TABLE_NAME IN ({placeholders})
+        ORDER BY TABLE_NAME, ORDINAL_POSITION
+    """, (dbname, *tables))
+    for record in records:
+        table = canonical.get(record.pop('table_name').casefold())
+        if table:
+            result[table].append(record)
+    return result
+
+
 def create_app(test_config=None):
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     # Cloudflared forwards HTTPS scheme/host to the localhost-only web server.
@@ -135,8 +156,10 @@ def create_app(test_config=None):
     def prepare():
         if not request.path.startswith('/api/'):
             return
-        g.c = connect(database=app.config['DATABASE'])
-        g.user = current_user(g.c)
+        anonymous_session = (request.path in ('/api/session', '/api/bootstrap')
+                             and request.method in ('GET', 'HEAD') and not session.get('uid'))
+        g.c = None if anonymous_session else connect(database=app.config['DATABASE'])
+        g.user = None if anonymous_session else current_user(g.c)
         session.setdefault('csrf', secrets.token_urlsafe(24))
         if request.method not in ('GET', 'HEAD', 'OPTIONS'):
             origin = request.headers.get('Origin')
@@ -190,6 +213,24 @@ def create_app(test_config=None):
     def show_session():
         return jsonify(csrf=session['csrf'], user=public_user(g.user))
 
+    def schema_data():
+        return all_table_columns(g.c, app.config['DATABASE'], readable_tables(g.user))
+
+    def overview_data():
+        if g.user['LoaiUser'] == 'KH':
+            return {'products': one(g.c, 'SELECT COUNT(*) AS n FROM SP')['n']}
+        tables = readable_tables(g.user)
+        query = ' UNION ALL '.join(
+            f'SELECT %s AS table_name, COUNT(*) AS n FROM `{table}`' for table in tables)
+        return {row['table_name']: row['n'] for row in rows(g.c, query, tables)}
+
+    @app.get('/api/bootstrap')
+    def bootstrap():
+        result = {'csrf': session['csrf'], 'user': public_user(g.user)}
+        if g.user:
+            result.update(tables=schema_data(), overview=overview_data())
+        return jsonify(result)
+
     @app.post('/api/login')
     def login():
         body = request.get_json(silent=True) or {}
@@ -237,9 +278,7 @@ def create_app(test_config=None):
     @app.get('/api/schema')
     def schema():
         require(g.user is not None, 'Bạn chưa đăng nhập.', 401)
-        available = readable_tables(g.user)
-        return jsonify(tables={table: table_columns(g.c, app.config['DATABASE'], table)
-                               for table in TABLES if table in available})
+        return jsonify(tables=schema_data())
 
     @app.get('/api/data/<table>')
     def list_data(table):
@@ -360,12 +399,7 @@ def create_app(test_config=None):
     @app.get('/api/overview')
     def overview():
         require(g.user is not None, 'Bạn chưa đăng nhập.', 401)
-        if g.user['LoaiUser'] == 'KH':
-            return jsonify(products=one(g.c, 'SELECT COUNT(*) AS n FROM SP')['n'])
-        result = {}
-        for table in readable_tables(g.user):
-            result[table] = one(g.c, f'SELECT COUNT(*) AS n FROM `{table}`')['n']
-        return jsonify(result)
+        return jsonify(overview_data())
 
     return app
 
