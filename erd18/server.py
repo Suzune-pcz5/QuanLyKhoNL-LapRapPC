@@ -52,9 +52,10 @@ class ProxyAwareSessionInterface(SecureCookieSessionInterface):
 
 
 class Problem(Exception):
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, code=None):
         super().__init__(message)
         self.status = status
+        self.code = code
 
 
 def require(condition, message, status=400):
@@ -141,8 +142,14 @@ def create_app(test_config=None):
             origin = request.headers.get('Origin')
             require(not origin or origin == request.host_url.rstrip('/'),
                     'Nguồn yêu cầu không hợp lệ.', 403)
-            require(secrets.compare_digest(request.headers.get('X-CSRF-Token', ''),
-                                           session['csrf']), 'CSRF không hợp lệ.', 403)
+            if not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), session['csrf']):
+                raise Problem('Phiên đăng nhập đã thay đổi. Vui lòng thử lại.', 403, 'CSRF_EXPIRED')
+
+    @app.after_request
+    def prevent_api_cache(response):
+        if request.path.startswith('/api/'):
+            response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @app.teardown_request
     def cleanup(_):
@@ -152,7 +159,10 @@ def create_app(test_config=None):
 
     @app.errorhandler(Problem)
     def problem(e):
-        return jsonify(error=str(e)), e.status
+        body = {'error': str(e)}
+        if e.code:
+            body['code'] = e.code
+        return jsonify(body), e.status
 
     @app.errorhandler(pymysql.IntegrityError)
     def integrity(e):

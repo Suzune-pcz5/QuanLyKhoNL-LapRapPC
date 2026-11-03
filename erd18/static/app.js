@@ -16,9 +16,13 @@ let csrf = '', user = null, columns = {}, activeTable = '', currentRows = [], ed
 const $ = id => document.getElementById(id);
 function canWrite(table){ return !!user?.permissions?.write?.includes(table); }
 function escapeHtml(s) {return String(s ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));}
-async function api(url, opts = {}) {
-  const response = await fetch(url, {...opts, headers:{'Content-Type':'application/json','X-CSRF-Token':csrf,...(opts.headers||{})}});
+async function api(url, opts = {}, retryLogin = true) {
+  const response = await fetch(url, {cache:'no-store',...opts, headers:{'Content-Type':'application/json',...(opts.headers||{}),'X-CSRF-Token':csrf}});
   const body = await response.json();
+  if(response.status===403 && body.code==='CSRF_EXPIRED' && url==='/api/login' && retryLogin){
+    const fresh=await api('/api/session');csrf=fresh.csrf;
+    return api(url,opts,false);
+  }
   if (!response.ok) throw new Error(body.error || 'Không thể tải dữ liệu');
   return body;
 }
@@ -143,14 +147,20 @@ $('record-form').addEventListener('submit',async event=>{
 });
 $('login-form').addEventListener('submit',async e=>{
   e.preventDefault();const form=new FormData(e.target);
+  const button=e.target.querySelector('button[type="submit"]');
+  if(button.disabled)return;
+  button.disabled=true;$('login-error').textContent='';
   try{
+    await initialBoot;
+    const fresh=await api('/api/session');csrf=fresh.csrf;
     const result=await api('/api/login',{method:'POST',body:JSON.stringify({userID:form.get('userID'),password:form.get('password')})});
     csrf=result.csrf;user=result.user;await enter();
   }catch(err){$('login-error').textContent=err.message;}
+  finally{button.disabled=false;}
 });
 $('app').addEventListener('click',e=>{const el=e.target.closest('[data-table]');if(el)choose(el.dataset.table);});
 $('add-btn').onclick=()=>openForm();
 $('close-dialog').onclick=closeForm;
 $('cancel-dialog').onclick=closeForm;
 $('logout-btn').onclick=async()=>{try{const result=await api('/api/logout',{method:'POST'});user=null;csrf=result.csrf;showLogin();}catch(e){message(e.message,true);}};
-boot();
+const initialBoot=boot();
