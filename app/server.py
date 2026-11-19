@@ -23,6 +23,9 @@ from web_state import WebState, MySQLWebState, ServerSessions
 MANAGER = 'QUAN_LY_KHO'
 EMPLOYEE = 'NHAN_VIEN'
 ADMIN = 'ADMIN'
+INVENTORY_SQL = """SELECT v.*,s.TrangThai SanPhamTrangThai,k.TrangThai ViTriTrangThai
+                   FROM V_TON_KHO v JOIN SAN_PHAM s ON s.MaSP=v.MaSP
+                   JOIN VI_TRI_KHO k ON k.MaViTri=v.MaViTri"""
 DOCS = {
     'incoming': ('PHIEU_NHAP', 'MaPN', MANAGER, 'MaNVLap', ['MaNCC', 'NgayChungTu', 'GhiChu']),
     'outgoing': ('PHIEU_XUAT', 'MaPX', EMPLOYEE, 'MaNVLap', ['LoaiXuat', 'MaYCLapRap', 'TenNguoiNhan', 'GhiChu']),
@@ -121,6 +124,23 @@ def normalized(obj):
     if isinstance(obj, (date, datetime)): return obj.isoformat(sep=' ') if isinstance(obj, datetime) else obj.isoformat()
     if isinstance(obj, Decimal): return int(obj) if obj == obj.to_integral_value() else str(obj)
     return obj
+
+
+def issuable_quantities(inventory):
+    quantities = {}
+    for item in inventory:
+        if item['SanPhamTrangThai'] == 'HOAT_DONG' and item['ViTriTrangThai'] == 'HOAT_DONG':
+            product_id = item['MaSP']
+            quantities[product_id] = quantities.get(product_id, 0) + item['SoLuongKhaDung']
+    return quantities
+
+
+def job_needs(c, job_id, issuable):
+    items = rows(c, 'SELECT * FROM V_NHU_CAU_LAP_RAP WHERE MaYC=%s ORDER BY MaSPLinhKien', (job_id,))
+    for item in items:
+        item['SoLuongKhaDung'] = issuable.get(item['MaSPLinhKien'], 0)
+        item['SoLuongThieu'] = max(0, item['SoLuongCan'] - item['SoLuongDaCap'] - item['SoLuongKhaDung'])
+    return items
 
 
 def create_app(test_config=None):
@@ -288,11 +308,8 @@ def create_app(test_config=None):
         if u['VaiTro'] == EMPLOYEE:
             result['employees'] = [n for n in result['employees'] if n['MaNV'] == u['MaNV']]
         result['accounts'] = rows(c, 'SELECT MaTK,MaNV,TenDangNhap,VaiTro,TrangThai,NgayTao FROM TAI_KHOAN ORDER BY MaTK') if u['VaiTro'] == ADMIN else []
-        result['inventory'] = rows(c, 'SELECT v.*,s.TrangThai SanPhamTrangThai,k.TrangThai ViTriTrangThai FROM V_TON_KHO v JOIN SAN_PHAM s ON s.MaSP=v.MaSP JOIN VI_TRI_KHO k ON k.MaViTri=v.MaViTri ORDER BY SKU,MaViTri')
-        issuable = {}
-        for item in result['inventory']:
-            if item['SanPhamTrangThai'] == 'HOAT_DONG' and item['ViTriTrangThai'] == 'HOAT_DONG':
-                issuable[item['MaSP']] = issuable.get(item['MaSP'], 0) + item['SoLuongKhaDung']
+        result['inventory'] = rows(c, INVENTORY_SQL + ' ORDER BY SKU,MaViTri')
+        issuable = issuable_quantities(result['inventory'])
         for kind, (table, key, _role, _owner, _fields) in DOCS.items():
             where, args = '', ()
             if u['VaiTro'] == EMPLOYEE:
@@ -305,16 +322,37 @@ def create_app(test_config=None):
                     detail_table, _fields = DETAILS[kind]
                     d['lines'] = rows(c, f'SELECT * FROM {detail_table} WHERE {key}=%s', (d[key],))
                 if kind == 'jobs':
-                    d['needs'] = rows(c, 'SELECT * FROM V_NHU_CAU_LAP_RAP WHERE MaYC=%s', (d[key],))
-                    for item in d['needs']:
-                        item['SoLuongKhaDung'] = issuable.get(item['MaSPLinhKien'], 0)
-                        item['SoLuongThieu'] = max(0, item['SoLuongCan'] - item['SoLuongDaCap'] - item['SoLuongKhaDung'])
+                    d['needs'] = job_needs(c, d[key], issuable)
+                    d['BaoThieu'] = json.loads(d['BaoThieu']) if d.get('BaoThieu') else None
                     d['materials'] = rows(c, 'SELECT * FROM V_VAT_LIEU_LAP_RAP WHERE MaYC=%s', (d[key],))
                     d['accepted'] = one(c, "SELECT COALESCE(SUM(SoLuongDat+SoLuongLoi),0) n FROM KET_QUA_LAP_RAP WHERE MaYC=%s AND TrangThai='DA_TIEP_NHAN'", (d[key],))['n']
                     d['pending'] = one(c, "SELECT COALESCE(SUM(SoLuongDat+SoLuongLoi),0) n FROM KET_QUA_LAP_RAP WHERE MaYC=%s AND TrangThai='CHO_TIEP_NHAN'", (d[key],))['n']
             result[kind] = docs
         result['ledger'] = rows(c, 'SELECT b.*,s.SKU,s.TenSP,v.MaViTriHienThi,n.HoTen FROM BIEN_DONG_KHO b JOIN SAN_PHAM s ON s.MaSP=b.MaSP JOIN VI_TRI_KHO v ON v.MaViTri=b.MaViTri JOIN NHAN_VIEN n ON n.MaNV=b.MaNV ORDER BY MaBienDong DESC') if u['VaiTro'] in (MANAGER, ADMIN) else []
         return jsonify(normalized(result))
+
+    @app.post('/api/jobs/<int:ident>/shortage-report')
+    def report_shortage(ident):
+        role(EMPLOYEE)
+        c = g.c
+        c.begin()
+        # Serialize with another report, cancellation or issue approval for the same job.
+        job = one(c, 'SELECT * FROM YEU_CAU_LAP_RAP WHERE MaYC=%s FOR UPDATE', (ident,))
+        need(job, 'Không tìm thấy yêu cầu lắp ráp.', 404)
+        need(job['MaNVNhan'] == g.user['MaNV'], 'Chỉ nhân viên được giao mới có thể báo thiếu.', 403)
+        need(job['TrangThai'] == 'DA_GIAO' and job['DaNhanViec'], 'Yêu cầu phải được nhận việc và đang chờ cấp linh kiện.', 409)
+        if job['BaoThieu']:
+            c.commit()
+            return jsonify(report=json.loads(job['BaoThieu']), message='Đã báo thiếu cho quản lý kho.')
+        inventory = rows(c, INVENTORY_SQL + """
+            WHERE v.MaSP IN (SELECT MaSPLinhKien FROM CT_NHU_CAU_LAP_RAP WHERE MaYC=%s)""", (ident,))
+        missing = [{'SKU': item['SKU'], 'SoLuongThieu': item['SoLuongThieu']}
+                   for item in job_needs(c, ident, issuable_quantities(inventory)) if item['SoLuongThieu'] > 0]
+        need(missing, 'Kho hiện đã đủ linh kiện cho yêu cầu này. Hãy làm mới để đề nghị cấp.', 409)
+        report = normalized(dict(ThoiDiem=one(c, 'SELECT NOW(6) n')['n'], lines=missing))
+        update(c, 'YEU_CAU_LAP_RAP', 'MaYC', ident, {'BaoThieu': json.dumps(report, ensure_ascii=False)})
+        c.commit()
+        return jsonify(report=report, message='Đã báo thiếu linh kiện cho quản lý kho.')
 
     def document_values(kind, b):
         c = g.c

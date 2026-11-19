@@ -1,7 +1,24 @@
 """Repeatable routine, trigger and label upgrades without rebuilding tables."""
 from datetime import datetime
 
+from pymysql import MySQLError
+
 from db import ROOT, RUNTIME, execute, one, sql_statements
+
+
+def upgrade_shortage_report(c, database):
+    """Add one nullable shortage report per assembly job."""
+    c.select_db(database)
+    if one(c, """SELECT 1 FROM information_schema.columns
+                 WHERE table_schema=%s AND table_name='YEU_CAU_LAP_RAP' AND column_name='BaoThieu'""", (database,)):
+        return False
+    try:
+        execute(c, 'ALTER TABLE YEU_CAU_LAP_RAP ADD COLUMN BaoThieu JSON AFTER LyDoHuy')
+    except MySQLError as error:
+        if error.args[:1] != (1060,):
+            raise
+        return False
+    return True
 
 
 def normalize_unit_labels(c):

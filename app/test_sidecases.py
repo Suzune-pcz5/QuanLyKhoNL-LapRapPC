@@ -48,6 +48,44 @@ class SidecaseTests(WarehouseTests):
         px = self.create('outgoing', dict(LoaiXuat='CAP_PHAT', MaYCLapRap=yc, lines=[dict(MaSP=1, MaViTri=1, SoLuongXuat=3), dict(MaSP=2, MaViTri=1, SoLuongXuat=6)]), self.employee)
         self.action('outgoing', px, 'send', self.employee, expected=409)
 
+    def test_shortage_report_boundaries(self):
+        yc = self.create('jobs', dict(MaBOM=1, SoLuongYeuCau=3, MaNVNhan=2))
+        path = f'jobs/{yc}/shortage-report'
+        self.action('jobs', yc, 'assign')
+        self.mutate(self.employee, path, expected=409)
+        self.mutate(self.other, path, expected=403)
+        self.mutate(self.manager, path, expected=403)
+        self.action('jobs', yc, 'receive', self.employee)
+        self.mutate(self.employee, path, expected=409)
+        self.assertIsNone(next(j for j in self.state()['jobs'] if j['MaYC'] == yc)['BaoThieu'])
+
+    def test_shortage_report_is_visible_once_and_preserves_the_snapshot(self):
+        yc = self.job(qty=10)
+        path = f'jobs/{yc}/shortage-report'
+        before = self.state()
+        expected = [{'SKU': 'CPU-001', 'SoLuongThieu': 3}, {'SKU': 'RAM-001', 'SoLuongThieu': 8}]
+        clients = [self.employee, self.login('nhanvien')]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first, second = pool.map(lambda client: self.mutate(client, path)['report'], clients)
+        self.assertEqual(first, second)
+        self.assertEqual(first['lines'], expected)
+        after = self.state()
+        self.assertEqual(next(j for j in after['jobs'] if j['MaYC'] == yc)['BaoThieu'], first)
+        self.assertFalse(any(j['MaYC'] == yc for j in self.state(self.other)['jobs']))
+        for field in ('inventory', 'ledger', 'incoming', 'outgoing'):
+            self.assertEqual(before[field], after[field])
+
+        receipt = self.create('incoming', self.receipt(lines=[
+            dict(MaSP=1, MaViTri=1, SoLuongNhan=3, SoLuongLoi=0, DonGiaNhap=1),
+            dict(MaSP=2, MaViTri=1, SoLuongNhan=8, SoLuongLoi=0, DonGiaNhap=1),
+        ]))
+        self.action('incoming', receipt, 'commit')
+        job = next(j for j in self.state()['jobs'] if j['MaYC'] == yc)
+        self.assertEqual([item['SoLuongThieu'] for item in job['needs']], [0, 0])
+        self.assertEqual(job['BaoThieu'], first)
+        self.action('jobs', yc, 'cancel', reason='QA')
+        self.mutate(self.employee, path, expected=409)
+
     def test_allocation_must_equal_snapshot_exactly(self):
         yc = self.job()
         before = self.state()['inventory']

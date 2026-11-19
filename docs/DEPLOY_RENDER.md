@@ -45,6 +45,12 @@ Lệnh đầu chỉ nhận database trống và user ứng dụng mới; không 
 
 `--seed` tạo tồn mẫu và bốn tài khoản `quanly`, `nhanvien`, `nhanvien_khac`, `admin`, dùng `INITIAL_PASSWORD`. Không dùng `--seed` thì tạo một tài khoản `admin` để nhập dữ liệu từ đầu. Mật khẩu được lưu bằng hash.
 
+Với database đã khởi tạo từ bản cũ, chạy lệnh sau trước khi triển khai tính năng **Báo thiếu linh kiện**. Lệnh bổ sung cột vào bảng yêu cầu lắp ráp và cập nhật quyền của user ứng dụng. Có thể chạy lại.
+
+```powershell
+& $taskPython cloud_setup.py --config-file $taskConfig --migrate-shortage-report
+```
+
 ## 3. Cấu hình Render
 
 | Ô | Giá trị |

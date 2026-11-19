@@ -115,13 +115,26 @@ const recipientName = r => r?.MaPX===2 && r.TenNguoiNhan==='Bo phan ban hang dem
 function productCell(id){const p=getProduct(id);return `<div class="product-cell"><span class="product-icon">${p?.LoaiMatHang==='THANH_PHAM'?'▣':'▥'}</span><div><strong>${e(p?.TenSP||'Sản phẩm #'+id)}</strong><small>${e(p?.SKU)}</small></div></div>`;}
 function toolbar(extra='',hint='Tìm kiếm theo mã hoặc tên'){return `<div class="toolbar"><input id="search" type="search" placeholder="⌕  ${hint}" aria-label="Tìm kiếm">${extra}<small>Nhấn tiêu đề cột để sắp xếp ↕</small></div>`;}
 function inventoryTable(data){return table([['SẢN PHẨM',r=>productCell(r.MaSP)],['LOẠI HÀNG',r=>`<span class="badge">${kindText(r.LoaiMatHang)}</span>`],['VỊ TRÍ',r=>e(r.MaViTriHienThi)],['THỰC TẾ',r=>`<span class="number">${num(r.SoLuongThucTe)}</span>`],['KHÔNG BÁN',r=>`<span class="number ${r.SoLuongKhongBan?'danger':''}">${num(r.SoLuongKhongBan)}</span>`],['KHẢ DỤNG',r=>`<span class="number" style="color:var(--teal)">${num(r.SoLuongKhaDung)}</span>`],['ĐƠN VỊ',r=>e(r.DonViTinh)],['TÌNH TRẠNG',r=>r.ViTriTrangThai==='NGUNG'||r.SanPhamTrangThai==='NGUNG'?badge('NGUNG'):r.SoLuongKhaDung?badge('HOAT_DONG'):'<span class="badge yellow">Hết hàng tốt</span>']],data,'Kho chưa có số dư.',r=>`data-type="${r.LoaiMatHang}" data-location="${r.MaViTri}"`);}
+const shortageLines = job => job?.needs?.filter(item=>item.SoLuongThieu>0) || [];
+const shortageSummary = lines => lines.map(item=>`${item.SKU} thiếu ${num(item.SoLuongThieu)}`).join(' · ');
+const openShortageReport = job => job.BaoThieu && job.TrangThai==='DA_GIAO' && shortageLines(job).length>0;
+function shortageReports(jobs){
+ const reports=jobs.filter(openShortageReport).sort((a,b)=>b.BaoThieu.ThoiDiem.localeCompare(a.BaoThieu.ThoiDiem));
+ if(!reports.length)return '';
+ return panel('Báo thiếu linh kiện',table([
+  ['YÊU CẦU',r=>`<button data-detail="jobs" data-id="${r.MaYC}">YC-${String(r.MaYC).padStart(3,'0')}</button>`],
+  ['NHÂN VIÊN',r=>e(getEmployee(r.MaNVNhan))],['HIỆN CÒN THIẾU',r=>e(shortageSummary(shortageLines(r)))],
+  ['THỜI ĐIỂM BÁO',r=>formatDate(r.BaoThieu.ThoiDiem)],
+  ['THAO TÁC',r=>`<button type="button" class="primary" data-replenish-job="${r.MaYC}">Tạo phiếu nhập</button>`]
+ ],reports));
+}
 function overview(){
  const d=S.data;const pending=d.outgoing.filter(r=>r.TrangThai==='CHO_DUYET').length+d.results.filter(r=>r.TrangThai==='CHO_TIEP_NHAN').length;
  const busy=d.jobs.filter(r=>!['HUY','HOAN_THANH','NHAP'].includes(r.TrangThai)).length;
  const stats=[['SKU trong danh mục',d.products.length,'Nguyên liệu và PC thành phẩm','▦'],['Chứng từ chờ xử lý',pending,'Phiếu xuất và kết quả lắp ráp','◷'],['Yêu cầu đang thực hiện',busy,'Theo dõi từ giao việc đến hoàn thành','⌘'],['Vị trí có hàng lỗi',new Set(d.inventory.filter(r=>r.SoLuongKhongBan>0).map(r=>r.MaViTri)).size,'Hàng lỗi không được cấp hoặc xuất','◇']];
  const act=S.user.VaiTro==='QUAN_LY_KHO'?'<button class="primary" data-new="incoming">＋ Tạo phiếu nhập</button>':S.user.VaiTro==='NHAN_VIEN'?'<button class="primary" data-new="outgoing">＋ Đề nghị xuất</button>':'<button class="primary" data-nav="accounts">Quản lý tài khoản →</button>';
  const activity=d.ledger.slice(0,5).map(r=>`<div class="activity-item"><span class="activity-icon">${r.DeltaThucTe>0?'↙':'↗'}</span><div><strong>${e(r.SKU)} · ${e({NHAP_NCC:'Nhập NCC',NHAP_THANH_PHAM:'Nhận PC',CAP_PHAT:'Cấp vật liệu',XUAT_THANH_PHAM:'Xuất PC'}[r.LoaiBienDong])}</strong><small>${e(getLocation(r.MaViTri))} · ${formatDate(r.ThoiDiem)}</small></div><span class="delta" style="color:${r.DeltaThucTe>0?'var(--teal)':'var(--orange)'}">${r.DeltaThucTe>0?'+':''}${num(r.DeltaThucTe)}</span></div>`).join('');
- return head('Tổng quan kho','Tồn kho, chứng từ và tiến độ lắp ráp.',act)+`<div class="stats">${stats.map(([l,n,h,i])=>`<div class="stat"><div class="stat-top"><small>${l}</small><span class="stat-icon">${i}</span></div><strong>${num(n)}</strong><p>${h}</p></div>`).join('')}</div>`+`<div class="dashboard-grid">${panel('Tồn kho hiện tại',inventoryTable(d.inventory),'<button class="link-button" data-nav="inventory">Xem tất cả →</button>')}${panel('Biến động gần đây',`<div class="activity">${activity||'<p class="empty">Chưa có biến động được phép xem.</p>'}</div>`)}</div>`;
+ return head('Tổng quan kho','Tồn kho, chứng từ và tiến độ lắp ráp.',act)+`<div class="stats">${stats.map(([l,n,h,i])=>`<div class="stat"><div class="stat-top"><small>${l}</small><span class="stat-icon">${i}</span></div><strong>${num(n)}</strong><p>${h}</p></div>`).join('')}</div>`+(S.user.VaiTro==='QUAN_LY_KHO'?shortageReports(d.jobs):'')+`<div class="dashboard-grid">${panel('Tồn kho hiện tại',inventoryTable(d.inventory),'<button class="link-button" data-nav="inventory">Xem tất cả →</button>')}${panel('Biến động gần đây',`<div class="activity">${activity||'<p class="empty">Chưa có biến động được phép xem.</p>'}</div>`)}</div>`;
 }
 function inventory(){return head('Tồn kho','Số dư theo SKU và vị trí. Khả dụng = thực tế − không bán.')+panel('Danh sách tồn',toolbar(`<select id="type-filter" aria-label="Loại hàng"><option value="">Tất cả loại hàng</option><option value="NGUYEN_LIEU">Nguyên liệu</option><option value="THANH_PHAM">Thành phẩm</option></select><select id="location-filter" aria-label="Vị trí"><option value="">Tất cả vị trí</option>${S.data.locations.map(l=>`<option value="${l.MaViTri}">${e(l.MaViTriHienThi)}</option>`).join('')}</select>`)+inventoryTable(S.data.inventory),`<small>${S.data.inventory.length} số dư · không cộng gộp khác đơn vị</small>`);}
 function actionButtons(kind,r){
@@ -143,7 +156,7 @@ function documents(kind){
  if(kind==='bom')columns.push(['CẤU HÌNH',r=>`<strong>${e(bomName(r))}</strong><br><small>${e(getProduct(r.MaSPThanhPham)?.SKU)}</small>`],['PHIÊN BẢN',r=>'V'+r.PhienBan],['NGUYÊN LIỆU',r=>num(r.lines.length)]);
  if(kind==='jobs')columns.push(['CÔNG THỨC',r=>e(bomName(S.data.bom.find(b=>b.MaBOM==r.MaBOM)))],['NHÂN VIÊN',r=>e(getEmployee(r.MaNVNhan))],['TIẾN ĐỘ',r=>`${num(r.accepted)} / ${num(r.SoLuongYeuCau)} PC<div class="progress"><span style="width:${Math.min(100,100*r.accepted/r.SoLuongYeuCau)}%"></span></div><small>${num(r.pending)} chờ tiếp nhận</small>`],['NHẬN VIỆC',r=>r.DaNhanViec?'Đã nhận':'Chưa nhận']);
  if(kind==='results')columns.push(['YÊU CẦU',r=>'YC-'+r.MaYC],['NGƯỜI LẬP',r=>e(getEmployee(r.MaNVLap))],['ĐẠT',r=>`<span class="number">${num(r.SoLuongDat)}</span>`],['LỖI',r=>`<span class="number danger">${num(r.SoLuongLoi)}</span>`]);
- columns.push(['TRẠNG THÁI',r=>badge(r.TrangThai)],['THAO TÁC',r=>actionButtons(kind,r)]);
+ columns.push(['TRẠNG THÁI',r=>badge(r.TrangThai)+(kind==='jobs'&&openShortageReport(r)?' <span class="badge yellow">Đã báo thiếu</span>':'')],['THAO TÁC',r=>actionButtons(kind,r)]);
  return head(d.title,d.desc,S.user.VaiTro===d.role?`<button class="primary" data-new="${kind}">＋ Tạo ${d.one}</button>`:'')+panel(d.title,toolbar(`<select id="state-filter" aria-label="Trạng thái"><option value="">Tất cả trạng thái</option>${[...new Set(list.map(r=>r.TrangThai))].map(s=>`<option value="${s}">${e(labels[s])}</option>`).join('')}</select>`)+table(columns,list,'Chưa có chứng từ. Tạo bản nháp để bắt đầu.',r=>`data-state="${r.TrangThai}"`),`<small>${list.length} chứng từ</small>`);
 }
 function ledger(){return head('Lịch sử biến động','Mỗi dòng nhập hoặc xuất ghi một biến động. Lịch sử chỉ được xem.')+panel('Nhật ký kho',toolbar()+table([['THỜI ĐIỂM',r=>formatDate(r.ThoiDiem)],['SKU',r=>e(r.SKU)],['VỊ TRÍ',r=>e(r.MaViTriHienThi)],['NGHIỆP VỤ',r=>e({NHAP_NCC:'Nhập nguyên liệu',NHAP_THANH_PHAM:'Nhận thành phẩm',CAP_PHAT:'Cấp vật liệu',XUAT_THANH_PHAM:'Xuất thành phẩm'}[r.LoaiBienDong])],['THỰC TẾ ±',r=>`<span class="number">${r.DeltaThucTe>0?'+':''}${num(r.DeltaThucTe)}</span>`],['LỖI ±',r=>num(r.DeltaKhongBan)],['NGƯỜI GHI NHẬN',r=>e(r.HoTen)],['NGUỒN',r=>r.MaCTPN?'Dòng nhập #'+r.MaCTPN:'Dòng xuất #'+r.MaCTPX]],S.data.ledger));}
@@ -223,16 +236,67 @@ function documentEditor(kind,ident=null,preset={}){
  if(kind==='bom')fields=field('MaSPThanhPham','PC thành phẩm','select','',productOptions('THANH_PHAM',r.MaSPThanhPham))+field('PhienBan','Phiên bản','number',r.PhienBan||Math.max(0,...S.data.bom.map(b=>b.PhienBan))+1)+field('TenCauHinh','Tên cấu hình','text',r.TenCauHinh,null,true,true);
  if(kind==='jobs')fields=field('MaBOM','BOM đang áp dụng','select','',options(S.data.bom.filter(b=>b.TrangThai==='DANG_AP_DUNG'),'MaBOM',b=>`${bomName(b)} · V${b.PhienBan}`,r.MaBOM))+field('SoLuongYeuCau','Số PC cần lắp','number',r.SoLuongYeuCau||3)+field('MaNVNhan','Nhân viên được giao','select','',options(S.data.employees.filter(n=>n.VaiTro==='NHAN_VIEN'&&n.TaiKhoanTrangThai==='HOAT_DONG'&&n.TrangThai==='DANG_LAM'),'MaNV',n=>n.HoTen,r.MaNVNhan))+field('HanMongMuon','Hạn mong muốn (UTC+7)','datetime-local',(r.HanMongMuon||'').replace(' ','T'),null,false);
  if(kind==='results')fields=(!ident?field('MaYC','Yêu cầu đã cấp vật liệu','select','',options(S.data.jobs.filter(j=>['DA_CAP_VAT_LIEU','DANG_LAP_RAP'].includes(j.TrangThai)),'MaYC',j=>`YC-${j.MaYC} · còn ${j.SoLuongYeuCau-j.accepted} PC`,r.MaYC)): '')+field('SoLuongDat','PC đạt','number',r.SoLuongDat??1)+field('SoLuongLoi','PC lỗi','number',r.SoLuongLoi??0)+field('MaViTriDat','Vị trí thành phẩm đạt','select','',locationOptions(r.MaViTriDat||2),false)+field('MaViTriLoi','Vị trí thành phẩm lỗi','select','',locationOptions(r.MaViTriLoi||3),false)+field('GhiChu','Ghi chú','textarea',r.GhiChu,null,false,true);
- openModal(`${ident?'Sửa':'Tạo'} ${def.one}${ident?' #'+ident:''}`,`<form id="document-form" data-kind="${kind}" data-id="${ident||''}"><div class="dialog-content"><div class="form-grid">${fields}</div>${['incoming','outgoing','bom'].includes(kind)?`<div class="section-label">CHI TIẾT ${kind==='bom'?'ĐỊNH MỨC':'HÀNG HÓA'}</div><div id="lines"></div><div class="head-actions"><button type="button" data-add-line="${kind}">＋ Thêm dòng</button>${kind==='outgoing'?'<button type="button" id="suggest-allocation">Gợi ý phân bổ</button>':''}</div>`:''}<div class="hint">Lưu nháp chưa thay đổi tồn. Sau khi gửi/chốt, chứng từ được khóa. ${kind==='results'?'Tổng đạt + lỗi đã tiếp nhận không vượt số PC được giao.':kind==='bom'?'Định mức là số nguyên dương cho một PC.':'Chỉ chọn sản phẩm và vị trí đang hoạt động.'}</div><div class="form-error" role="alert"></div></div><div class="dialog-actions">${ident?`<button type="button" class="danger" data-delete-doc="${kind}" data-id="${ident}">Xóa nháp</button>`:''}<button type="button" data-close="editor">Quay lại</button><button class="primary" type="submit">Lưu nháp</button></div></form>`);
+ const formNotice=kind==='outgoing'?'<div id="allocation-shortage" class="hint" hidden><div role="status"></div><button type="button" id="report-shortage" class="primary">Báo thiếu linh kiện</button></div>':
+  preset.receiptHint?`<p class="hint">${e(preset.receiptHint)}</p>`:'';
+ openModal(`${ident?'Sửa':'Tạo'} ${def.one}${ident?' #'+ident:''}`,`<form id="document-form" data-kind="${kind}" data-id="${ident||''}"><div class="dialog-content"><div class="form-grid">${fields}</div>${formNotice}${['incoming','outgoing','bom'].includes(kind)?`<div class="section-label">CHI TIẾT ${kind==='bom'?'ĐỊNH MỨC':'HÀNG HÓA'}</div><div id="lines"></div><div class="head-actions"><button type="button" data-add-line="${kind}">＋ Thêm dòng</button>${kind==='outgoing'?'<button type="button" id="suggest-allocation">Gợi ý phân bổ</button>':''}</div>`:''}<div class="hint">Lưu nháp chưa thay đổi tồn. Sau khi gửi/chốt, chứng từ được khóa. ${kind==='results'?'Tổng đạt + lỗi đã tiếp nhận không vượt số PC được giao.':kind==='bom'?'Định mức là số nguyên dương cho một PC.':'Chỉ chọn sản phẩm và vị trí đang hoạt động.'}</div><div class="form-error" role="alert"></div></div><div class="dialog-actions">${ident?`<button type="button" class="danger" data-delete-doc="${kind}" data-id="${ident}">Xóa nháp</button>`:''}<button type="button" data-close="editor">Quay lại</button><button class="primary" type="submit">Lưu nháp</button></div></form>`);
  if($('#lines'))$('#lines').innerHTML=(r.lines?.length?r.lines:[{}]).map(x=>lineHtml(kind,x)).join('');
  if(kind==='outgoing')toggleOutgoing();
 }
-function toggleOutgoing(){const cap=$('#document-form [name="LoaiXuat"]').value==='CAP_PHAT';document.querySelector('[data-field="MaYCLapRap"]').hidden=!cap;document.querySelector('[data-field="TenNguoiNhan"]').hidden=cap;$('#document-form [name="MaYCLapRap"]').required=cap;$('#document-form [name="TenNguoiNhan"]').required=!cap;$('#suggest-allocation').hidden=!cap;}
+async function openShortageReceipt(button){
+ const jobId=Number(button.dataset.replenishJob);
+ button.disabled=true;
+ if(!await reload() || S.page!=='overview' || S.user?.VaiTro!=='QUAN_LY_KHO' || $('#editor').open)return;
+ const job=S.data.jobs.find(item=>item.MaYC===jobId);
+ if(!job || !openShortageReport(job))throw Error('Yêu cầu này hiện không còn trong danh sách cần bổ sung linh kiện.');
+
+ const activeProducts=new Set(activeList('products').map(item=>item.MaSP));
+ const missing=shortageLines(job);
+ const inactive=missing.filter(item=>!activeProducts.has(item.MaSPLinhKien));
+ const lines=missing.filter(item=>activeProducts.has(item.MaSPLinhKien))
+  .map(item=>({MaSP:item.MaSPLinhKien,SoLuongNhan:item.SoLuongThieu}));
+ const inactiveHint=inactive.length?`Cần kích hoạt lại linh kiện để nhập kho (${inactive.map(item=>item.SKU).join(', ')}).`:'';
+ if(!lines.length)throw Error(inactiveHint);
+
+ $(`[data-replenish-job="${jobId}"]`)?.focus({preventScroll:true});
+ documentEditor('incoming',null,{
+  GhiChu:`Bổ sung linh kiện cho YC-${String(jobId).padStart(3,'0')}`,
+  lines,
+  receiptHint:['Số lượng gợi ý lấy từ phần còn thiếu. Kiểm tra lại số thực nhận trước khi lưu.',inactiveHint].filter(Boolean).join(' ')
+ });
+}
+function selectedAllocationJob(){
+ const form=$('#document-form');
+ if(form?.elements.LoaiXuat?.value==='CAP_PHAT')return S.data.jobs.find(job=>job.MaYC==form.elements.MaYCLapRap.value);
+}
+function updateShortageNotice(job=selectedAllocationJob(), missing=shortageLines(job)){
+ const notice=$('#allocation-shortage'),button=$('#report-shortage');
+ notice.hidden=!missing.length;
+ notice.querySelector('[role="status"]').textContent=missing.length?
+  `${shortageSummary(missing)}. ${job.BaoThieu?'Đã báo thiếu cho quản lý kho.':'Báo cho quản lý kho để bổ sung.'}`:'';
+ button.hidden=!!job?.BaoThieu || S.user.VaiTro!=='NHAN_VIEN' || job?.MaNVNhan!==S.user.MaNV;
+}
+async function sendShortageReport(button){
+ const job=selectedAllocationJob();
+ if(!job || button.hidden)return;
+ button.disabled=true;
+ const error=button.form.querySelector('.form-error');
+ error.textContent='';
+ try{
+  const response=await api(`/api/jobs/${job.MaYC}/shortage-report`,'POST',{});
+  const current=S.data.jobs.find(item=>item.MaYC===job.MaYC);
+  if(current)current.BaoThieu=response.report;
+  if(button.isConnected && selectedAllocationJob()?.MaYC===job.MaYC)updateShortageNotice(current,response.report.lines);
+  render();
+  toast(response.message);
+ }catch(exc){if(!(exc instanceof StaleRequestError)){if(button.isConnected)error.textContent=exc.message;toast(exc.message,true);}}
+}
+function toggleOutgoing(){const cap=$('#document-form [name="LoaiXuat"]').value==='CAP_PHAT';document.querySelector('[data-field="MaYCLapRap"]').hidden=!cap;document.querySelector('[data-field="TenNguoiNhan"]').hidden=cap;$('#document-form [name="MaYCLapRap"]').required=cap;$('#document-form [name="TenNguoiNhan"]').required=!cap;$('#suggest-allocation').hidden=!cap;updateShortageNotice();}
 function allocation(){
- const id=$('#document-form [name="MaYCLapRap"]').value,job=S.data.jobs.find(j=>j.MaYC==id);if(!job)throw Error('Chọn yêu cầu đã nhận việc trước.');
+ const job=selectedAllocationJob();if(!job)throw Error('Chọn yêu cầu đã nhận việc trước.');
  const lines=[];const missing=[];
- for(const need of job.needs){let left=need.SoLuongCan;for(const row of S.data.inventory.filter(r=>r.MaSP===need.MaSPLinhKien&&r.ViTriTrangThai==='HOAT_DONG'&&r.SanPhamTrangThai==='HOAT_DONG')){const qty=Math.min(left,row.SoLuongKhaDung);if(qty>0)lines.push({MaSP:row.MaSP,MaViTri:row.MaViTri,SoLuongXuat:qty});left-=qty;if(!left)break;}if(left)missing.push(`${need.SKU}: thiếu ${left}`);}
- if(missing.length)throw Error(missing.join('; ')+'. Nhờ quản lý bổ sung nhập kho.');
+ for(const need of job.needs){let left=need.SoLuongCan;for(const row of S.data.inventory.filter(r=>r.MaSP===need.MaSPLinhKien&&r.ViTriTrangThai==='HOAT_DONG'&&r.SanPhamTrangThai==='HOAT_DONG')){const qty=Math.min(left,row.SoLuongKhaDung);if(qty>0)lines.push({MaSP:row.MaSP,MaViTri:row.MaViTri,SoLuongXuat:qty});left-=qty;if(!left)break;}if(left)missing.push({SKU:need.SKU,SoLuongThieu:left});}
+ updateShortageNotice(job,missing);
+ if(missing.length)return;
  $('#lines').innerHTML=lines.map(r=>lineHtml('outgoing',r)).join('');toast('Đã phân bổ đủ nhu cầu từ các vị trí hoạt động. Kiểm tra trước khi gửi.');
 }
 function detail(kind,id){
@@ -247,6 +311,7 @@ function detail(kind,id){
  if(kind==='results')data.push(['Yêu cầu','YC-'+r.MaYC],['Đạt',num(r.SoLuongDat)+' · '+e(getLocation(r.MaViTriDat))],['Lỗi',num(r.SoLuongLoi)+' · '+e(getLocation(r.MaViTriLoi))],['Tiếp nhận',formatDate(r.ThoiDiemTiepNhan)]);
  if(r.GhiChu||r.LyDoTuChoi||r.LyDoHuy)data.push(['Ghi chú / lý do',e(r.LyDoTuChoi||r.LyDoHuy||r.GhiChu)]);
  let body='';
+ if(kind==='jobs' && r.BaoThieu)body+=`<div class="hint"><strong>Báo thiếu linh kiện</strong><br>${formatDate(r.BaoThieu.ThoiDiem)} · ${e(shortageSummary(r.BaoThieu.lines))}${r.TrangThai==='DA_GIAO'&&!shortageLines(r).length?'<br>Kho hiện đủ linh kiện.':''}</div>`;
  if(r.lines){let cols=[['SẢN PHẨM',x=>productCell(x.MaSP||x.MaSPLinhKien)]];if(kind!=='bom')cols.push(['VỊ TRÍ',x=>e(getLocation(x.MaViTri))]);if(kind==='incoming')cols.push(['NHẬN',x=>num(x.SoLuongNhan)],['LỖI',x=>num(x.SoLuongLoi)],['GIÁ MUA',x=>x.DonGiaNhap===null?'Chưa tính giá thành':num(x.DonGiaNhap)],['KIỂM NHẬN',x=>e(x.KetQuaKiemTra)||'—']);if(kind==='outgoing')cols.push(['XUẤT',x=>num(x.SoLuongXuat)]);if(kind==='bom')cols.push(['ĐỊNH MỨC / PC',x=>num(x.DinhMuc)]);body+=table(cols,r.lines);}
  if(kind==='jobs'){body+=`<h3>Nhu cầu chốt và vật liệu tại khu lắp ráp</h3>`+table([['NGUYÊN LIỆU',x=>productCell(x.MaSPLinhKien)],['ĐỊNH MỨC',x=>num(x.DinhMucChot)],['CẦN',x=>num(x.SoLuongCan)],['ĐÃ CẤP',x=>num(x.SoLuongDaCap)],['CÓ THỂ CẤP TỪ KHO',x=>num(x.SoLuongKhaDung)],['THIẾU',x=>num(x.SoLuongThieu)]],r.needs)+table([['NGUYÊN LIỆU',x=>e(getProduct(x.MaSPLinhKien)?.SKU)],['ĐÃ DÙNG',x=>num(x.SoLuongDaDung)],['CÒN Ở LẮP RÁP',x=>num(x.SoLuongCon)]],r.materials)+`<div class="hint">Số có thể cấp chỉ tính sản phẩm và vị trí đang hoạt động. Kết quả chờ tiếp nhận chưa trừ vật liệu dẫn xuất.</div>`;}
  openModal(title,`<div class="dialog-content"><dl class="detail-grid">${data.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>${body}</div><div class="dialog-actions"><button data-close="editor">Đóng</button><button data-print class="primary">In chứng từ</button></div>`,'CHI TIẾT & ĐỐI CHIẾU');
@@ -312,6 +377,7 @@ document.addEventListener('input',ev=>{if(ev.target.id==='search')filterTable();
 document.addEventListener('change',ev=>{
  if(['type-filter','location-filter','state-filter','category-filter'].includes(ev.target.id))filterTable();
  if(ev.target.name==='LoaiXuat'){toggleOutgoing();$('#lines').innerHTML=lineHtml('outgoing');}
+ if(ev.target.name==='MaYCLapRap')updateShortageNotice();
  if(ev.target.id==='period'){const v=ev.target.value;for(const [id,visible] of [['year',v!=='custom'],['month',v==='month'],['quarter',v==='quarter'],['from',v==='custom'],['to',v==='custom']]){const input=$('#report-'+id);input.closest('label').hidden=!visible;input.disabled=!visible;}}
  if(ev.target.closest('#report-form'))invalidateReport();
 });
@@ -326,11 +392,13 @@ document.addEventListener('click',async ev=>{
   if(['sidebar-close','menu-backdrop'].includes(b.id))setMenu(false);
   if(b.id==='logout'){b.disabled=true;await authLock(async()=>{invalidateAuth();S.csrf=(await api('/api/session')).csrf;await api('/api/logout','POST',{});showLogin();},true);}
   if(b.dataset.new)documentEditor(b.dataset.new);
+  if(b.dataset.replenishJob)await openShortageReceipt(b);
   if(b.dataset.edit)documentEditor(b.dataset.edit,b.dataset.id);
   if(b.dataset.detail)detail(b.dataset.detail,b.dataset.id);
   if(b.dataset.addLine)$('#lines').insertAdjacentHTML('beforeend',lineHtml(b.dataset.addLine));
   if(b.hasAttribute('data-remove-line'))b.closest('.line-grid').remove();
   if(b.id==='suggest-allocation')allocation();
+  if(b.id==='report-shortage')await sendShortageReport(b);
   if(b.dataset.allocate){documentEditor('outgoing',null,{LoaiXuat:'CAP_PHAT',MaYCLapRap:b.dataset.allocate});allocation();}
   if(b.dataset.resultJob)documentEditor('results',null,{MaYC:b.dataset.resultJob});
   if(b.dataset.action){b.disabled=true;await transition(b.dataset.kind,b.dataset.id,b.dataset.action);}

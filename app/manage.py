@@ -19,7 +19,7 @@ from werkzeug.security import generate_password_hash
 
 from db import BASE, ROOT, RUNTIME, call, connect, execute, insert, one, rows, run_sql, settings
 from seed_labels import normalize_seed_labels
-from migrations import upgrade_stock_diagnostics, upgrade_frozen_notes, upgrade_frozen_headers, normalize_unit_labels
+from migrations import upgrade_stock_diagnostics, upgrade_frozen_notes, upgrade_frozen_headers, upgrade_shortage_report, normalize_unit_labels
 from config import external_configured
 
 MYSQL = RUNTIME / 'mysql-8.4.11-winx64'
@@ -173,6 +173,12 @@ def grant_app(c, database, host='localhost', create_account=True):
         execute(c, f'GRANT UPDATE ({cols}) ON `{database}`.{table} TO {who}')
     for routine in PUBLIC:
         execute(c, f'GRANT EXECUTE ON PROCEDURE `{database}`.{routine} TO {who}')
+    grant_shortage_report(c, database, host)
+
+
+def grant_shortage_report(c, database, host):
+    who = (c.escape(settings()['user']) + '@' + c.escape(host)).replace('%', '%%')
+    execute(c, f'GRANT UPDATE (BaoThieu) ON `{database}`.YEU_CAU_LAP_RAP TO {who}')
 
 
 def temporary_database(database):
@@ -256,6 +262,7 @@ def initialize(database=None):
     elif count != 17:
         raise RuntimeError('CSDL chua du 17 bang. Khong tu xoa hoac ghi de du lieu.')
     try:
+        upgrade_shortage_report(c, database)
         upgrade_stock_diagnostics(c, database)
         upgrade_frozen_notes(c, database)
         upgrade_frozen_headers(c, database)
@@ -273,9 +280,12 @@ def migrate():
     c = connect(admin=True)
     try:
         database = settings()['database']
+        shortage_report = upgrade_shortage_report(c, database)
+        grant_shortage_report(c, database, 'localhost')
         return dict(stock=upgrade_stock_diagnostics(c, database), frozen_notes=upgrade_frozen_notes(c, database),
                     frozen_headers=upgrade_frozen_headers(c, database),
-                    sample_text_labels=normalize_seed_labels(c), units=normalize_unit_labels(c))
+                    sample_text_labels=normalize_seed_labels(c), units=normalize_unit_labels(c),
+                    shortage_report=shortage_report)
     finally:
         c.close()
 

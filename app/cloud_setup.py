@@ -9,9 +9,9 @@ import pymysql
 from werkzeug.security import generate_password_hash
 
 from db import ROOT, ConfigurationError, connect, execute, insert, one, run_sql, settings
-from manage import grant_app
+from manage import grant_app, grant_shortage_report
 from seed_labels import normalize_seed_labels
-from migrations import normalize_unit_labels
+from migrations import normalize_unit_labels, upgrade_shortage_report
 from web_state import MYSQL_STATE_SCHEMA
 
 
@@ -94,16 +94,32 @@ def initialize_cloud(seed=False):
         c.close()
 
 
+def migrate_shortage_report_cloud():
+    x = settings()
+    if not x.get('external'):
+        raise ConfigurationError('Cloud migration requires explicit MYSQL_* settings.')
+    c = connect(admin=True)
+    try:
+        changed = upgrade_shortage_report(c, x['database'])
+        grant_shortage_report(c, x['database'], '%')
+        return dict(shortage_report=changed)
+    finally:
+        c.close()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config-file', help='Private JSON environment settings outside Git; never printed.')
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument('--initialize-empty', action='store_true', help='Acknowledge creation in explicitly configured empty databases.')
+    action.add_argument('--migrate-shortage-report', action='store_true', help='Enable shortage reporting in the configured existing business database.')
     action.add_argument('--export-render-env', metavar='PATH', help='Write app-only dotenv settings; excludes provider admin and initial account passwords.')
     parser.add_argument('--seed', action='store_true', help='Load the sample stock and four role accounts with INITIAL_PASSWORD.')
     args = parser.parse_args()
     if args.config_file: load_private_config(args.config_file)
     if args.export_render_env:
         print('Render environment file written:',export_render_environment(args.export_render_env))
+    elif args.migrate_shortage_report:
+        print('Cloud migration verified:', migrate_shortage_report_cloud())
     else:
         print('Cloud setup verified:', initialize_cloud(args.seed))

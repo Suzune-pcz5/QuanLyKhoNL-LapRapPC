@@ -25,4 +25,6 @@
 .stock-summary{list-style:none;padding:0;margin:16px 0}
 .stock-summary li{background:var(--canvas);border:1px solid var(--border);border-radius:7px;padding:12px;margin:8px 0;font-size:12px;line-height:1.8}
 .stock-summary li>span{display:block}
+#allocation-shortage{border:1px solid var(--border);font-size:13px;overflow-wrap:anywhere}
+#allocation-shortage button{margin-top:8px;min-height:44px}
 @media(max-width:760px){#confirmation{padding:20px}.stock-summary li{padding:10px}}
