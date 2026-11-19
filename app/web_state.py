@@ -1,6 +1,7 @@
 """Durable HTTP metadata outside the seventeen business tables."""
 import hashlib
 import json
+import re
 import secrets
 import sqlite3
 import time
@@ -89,12 +90,13 @@ class MySQLWebState(WebState):
 
 
 class ServerSession(CallbackDict, SessionMixin):
-    def __init__(self, data=None, sid=None, version=None):
+    def __init__(self, data=None, sid=None, version=None, cookie_name=None):
         super().__init__(data, lambda value: setattr(value, 'modified', True))
         self.sid = sid or secrets.token_urlsafe(32)
         self.version = version
         self.modified = False
         self.rotate = False
+        self.cookie_name = cookie_name
 
 
 class ServerSessions(SessionInterface):
@@ -108,7 +110,14 @@ class ServerSessions(SessionInterface):
     def open_session(self, app, request):
         if request.path == '/healthz':
             return ServerSession()
-        token = request.cookies.get(self.get_cookie_name(app))
+        name = self.get_cookie_name(app)
+        tab = request.headers.get('X-Session-Tab')
+        if tab is not None:
+            if not re.fullmatch(r'[0-9a-f]{32}', tab):
+                # Authorization rejects this header before any route can use or save it.
+                return ServerSession()
+            name += '_' + tab
+        token = request.cookies.get(name)
         if token:
             try:
                 sid = self.signer(app).loads(token)
@@ -116,15 +125,15 @@ class ServerSessions(SessionInterface):
                     with self.store.connection() as c:
                         row = c.execute('SELECT * FROM sessions WHERE sid=? AND expires>?', (sid, time.time())).fetchone()
                     if row:
-                        return ServerSession(json.loads(row['data']), sid, row['version'])
+                        return ServerSession(json.loads(row['data']), sid, row['version'], name)
             except BadSignature:
                 pass
-        return ServerSession()
+        return ServerSession(cookie_name=name)
 
     def save_session(self, app, session, response):
         if not session.modified:
             return
-        name = self.get_cookie_name(app)
+        name = session.cookie_name or self.get_cookie_name(app)
         with self.store.connection() as c:
             c.execute('DELETE FROM sessions WHERE expires<=?', (time.time(),))
             if not session:

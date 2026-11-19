@@ -15,6 +15,8 @@ w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');
 w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');this.dispatchEvent(new w.Event('close'));};
 w.print=()=>{};
 w.fetch=async(url,options={})=>{
+ assert.match(options.headers['X-Session-Tab'],/^[0-9a-f]{32}$/,'Every API call identifies its tab');
+ assert.equal(options.headers['X-Session-Tab'],w.sessionStorage.getItem('kho.sessionTab'),'Reload can reuse the persisted tab namespace');
  requests.push(url);
  if(url==='/api/session')return response({csrf:'test',user:current?.user||null});
  if(url==='/api/logout'){current=null;return response({ok:true});}
@@ -45,6 +47,10 @@ async function login(name){$('#login-form [name=username]').value=name;$('#login
 async function logout(){$('#logout').click();await tick();check(!$('#login').hidden&&$('#workspace').hidden,'Logout shows login only');}
 (async()=>{
  await tick();check(!$('#workspace').hidden,'Initial authenticated shell');
+ const requestsBefore=requests.length,otherKey='kho.authChanged.'+'f'.repeat(32);
+ w.localStorage.setItem(otherKey,JSON.stringify({phase:'start',id:'other-tab'}));
+ w.dispatchEvent(new w.StorageEvent('storage',{key:otherKey,newValue:w.localStorage.getItem(otherKey)}));await tick();
+ check(requests.length===requestsBefore&&!$('#workspace').hidden,'Another tab login does not replace this tab account');
  for(const outcome of ['success','unauthorized','network']){
   if(state('S.user?.VaiTro')!=='ADMIN'){await logout();await login('admin');}
   const pending=defer();nextState=pending;$('#content [data-refresh]').click();await pending.ready;

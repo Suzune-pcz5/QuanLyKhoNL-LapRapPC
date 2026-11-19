@@ -30,14 +30,14 @@ w.fetch=async(url,options={})=>{
  throw Error('Unexpected API '+url);
 };
 vm.runInContext(fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8'),ctx);
-function authEvent(phase){const key='kho.authChanged',value=JSON.stringify({phase,id:w.crypto.randomUUID()});w.localStorage.setItem(key,value);w.dispatchEvent(new w.StorageEvent('storage',{key,newValue:value}));}
+function authEvent(phase){const key=state('authEventKey'),value=JSON.stringify({phase,id:w.crypto.randomUUID()});w.localStorage.setItem(key,value);w.dispatchEvent(new w.StorageEvent('storage',{key,newValue:value}));}
 const submit=async()=>{$('#document-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();};
 function receipt(){w.documentEditor('incoming');$('[name=MaNCC]').value='1';$('[name=MaSP]').value='1';$('[name=MaViTri]').value='1';$('[name=SoLuongNhan]').value='1';$('[name=SoLuongLoi]').value='2';}
 (async()=>{
  await tick();check(!$('#login-form [type=submit]').disabled,'Bootstrap permits login');
  if(process.argv.includes('--auth-only')||!process.argv.includes('--form-only')){
   // The other tab held the lock, announced start, then vanished without done.
-  const owner=deferred(),started=deferred();const held=w.navigator.locks.request('kho.auth',async()=>{started.resolve();await owner.promise;});await started.promise;
+  const owner=deferred(),started=deferred();const held=w.navigator.locks.request(state("'kho.auth.'+sessionTab"),async()=>{started.resolve();await owner.promise;});await started.promise;
   authEvent('start');await tick();check($('#login-form [type=submit]').disabled,'Login stays disabled while the other tab owns the lock');
   owner.resolve();await held;await tick();check(!$('#login-form [type=submit]').disabled&&!state('loginPending'),'Owner disappearance recovers login without a done event or reload');
   // Two notifications must not enable login while a session read is still queued.

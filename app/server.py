@@ -161,6 +161,8 @@ def create_app(test_config=None):
     def authorize():
         if not request.path.startswith('/api/'):
             return
+        tab = request.headers.get('X-Session-Tab')
+        need(tab is None or re.fullmatch(r'[0-9a-f]{32}', tab), 'Mã phiên của tab không hợp lệ.')
         if request.method not in ('GET', 'HEAD', 'OPTIONS'):
             origin = request.headers.get('Origin')
             expected_origin = app.config['APP_ORIGIN'] or request.host_url.rstrip('/')

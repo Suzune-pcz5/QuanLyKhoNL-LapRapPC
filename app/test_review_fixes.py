@@ -17,6 +17,42 @@ from test_integration import WarehouseTests
 
 
 class ReviewFixes(WarehouseTests):
+    def test_three_roles_in_one_cookie_jar_keep_independent_sessions(self):
+        browser = self.app.test_client()
+        tabs = {name: {'X-Session-Tab': secrets.token_hex(16)} for name in ('admin', 'quanly', 'nhanvien')}
+        roles = dict(admin='ADMIN', quanly='QUAN_LY_KHO', nhanvien='NHAN_VIEN')
+        old_cookies = {}
+        for name, headers in tabs.items():
+            csrf = browser.get('/api/session', headers=headers).json['csrf']
+            result = browser.post('/api/login', json=dict(username=name, password='Demo@12345'),
+                                  headers={**headers, 'X-CSRF-Token': csrf})
+            self.assertEqual(result.status_code, 200, result.json)
+            cookie_name = 'session_' + headers['X-Session-Tab']
+            cookie = browser.get_cookie(cookie_name)
+            self.assertTrue(cookie.http_only)
+            self.assertEqual(cookie.same_site, 'Strict')
+            old_cookies[name] = cookie.value
+        for name, headers in tabs.items():
+            self.assertEqual(browser.get('/api/session', headers=headers).json['user']['VaiTro'], roles[name])
+            self.assertEqual(browser.get('/api/state', headers=headers).json['user']['VaiTro'], roles[name])
+        manager_csrf = browser.get('/api/session', headers=tabs['quanly']).json['csrf']
+        denied = browser.post('/api/logout', json={}, headers={**tabs['admin'], 'X-CSRF-Token': manager_csrf})
+        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(browser.get('/api/report?from=2026-01-01&to=2027-01-01&format=csv', headers=tabs['quanly']).status_code, 200)
+        self.assertEqual(browser.get('/api/report?from=2026-01-01&to=2027-01-01', headers=tabs['nhanvien']).status_code, 403)
+        self.assertIsNone(browser.get('/api/session').json['user'])
+        csrf = browser.get('/api/session', headers=tabs['nhanvien']).json['csrf']
+        browser.post('/api/logout', json={}, headers={**tabs['nhanvien'], 'X-CSRF-Token': csrf})
+        self.assertIsNone(browser.get('/api/session', headers=tabs['nhanvien']).json['user'])
+        for name in ('admin', 'quanly'):
+            self.assertEqual(browser.get('/api/session', headers=tabs[name]).json['user']['VaiTro'], roles[name])
+        browser.set_cookie('session_' + tabs['nhanvien']['X-Session-Tab'], old_cookies['nhanvien'])
+        self.assertEqual(browser.get('/api/state', headers=tabs['nhanvien']).status_code, 401)
+        for tab in ('', 'bad', 'a' * 100, 'A' * 32):
+            result = browser.get('/api/session', headers={'X-Session-Tab': tab})
+            self.assertEqual(result.status_code, 400)
+            self.assertFalse(result.headers.getlist('Set-Cookie'))
+
     def receipt(self):
         return dict(MaNCC=1, NgayChungTu='2026-10-11', GhiChu='Thử lưu lại', lines=[dict(MaSP=1, MaViTri=1, SoLuongNhan=1, SoLuongLoi=0, DonGiaNhap=1)])
 

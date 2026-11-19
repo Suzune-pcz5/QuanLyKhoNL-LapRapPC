@@ -7,13 +7,21 @@ class StaleRequestError extends Error{}
 class NetworkError extends Error{}
 class ApiError extends Error{constructor(message,status,saveNotCommitted=false){super(message);this.status=status;this.saveNotCommitted=saveNotCommitted;}}
 function invalidateAuth(){authVersion++;reloadRequest++;reportRequest++;}
-const authEventKey='kho.authChanged';
+let sessionTab;
+try{
+ sessionTab=sessionStorage.getItem('kho.sessionTab');
+ if(!/^[0-9a-f]{32}$/.test(sessionTab||'')){
+  sessionTab=crypto.randomUUID().replaceAll('-','');
+  sessionStorage.setItem('kho.sessionTab',sessionTab);
+ }
+}catch{sessionTab=crypto.randomUUID().replaceAll('-','');}
+const authEventKey='kho.authChanged.'+sessionTab;
 let pendingAuth=0;
 function announceAuth(phase){try{localStorage.setItem(authEventKey,JSON.stringify({phase,id:crypto.randomUUID()}));}catch{}}
 async function authLock(action,announce=false){
  const run=async()=>{if(announce)announceAuth('start');try{return await action();}finally{if(announce)announceAuth('done');}};
  pendingAuth++;loginPending=true;$('#login-form [type="submit"]').disabled=true;
- try{return await (navigator.locks?.request?navigator.locks.request('kho.auth',run):run());}
+ try{return await (navigator.locks?.request?navigator.locks.request('kho.auth.'+sessionTab,run):run());}
  finally{loginPending=--pendingAuth>0;$('#login-form [type="submit"]').disabled=loginPending;}
 }
 async function syncSession(){
@@ -55,14 +63,20 @@ function allowed(page){
  if(['incoming','ledger'].includes(page))return S.user.VaiTro!=='NHAN_VIEN';
  return true;
 }
-async function api(url, method='GET', data, headers={}){
+async function api(url, method='GET', data, headers={},file=false){
  const version=authVersion;
  let res,b;
- try{res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':S.csrf,...headers},body:data===undefined?undefined:JSON.stringify(data)});b=await res.json();}
+ try{res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':S.csrf,...headers,'X-Session-Tab':sessionTab},body:data===undefined?undefined:JSON.stringify(data)});b=file&&res.ok?await res.blob():await res.json();}
  catch(error){if(version!==authVersion)throw new StaleRequestError();throw new NetworkError(method==='GET'?'Không thể tải dữ liệu. Kiểm tra kết nối và thử lại.':'Chưa xác định được kết quả thao tác do mất kết nối. Kiểm tra kết nối và làm mới dữ liệu.');}
  if(version!==authVersion)throw new StaleRequestError();
  if(!res.ok){if(res.status===401 && S.user){S.user=null;showLogin();}throw new ApiError(b.error||'Không thể kết nối backend.',res.status,b.save_not_committed===true);}
  return b;
+}
+async function downloadFile(url,name){
+ const blob=await api(url,'GET',undefined,{},true),objectUrl=URL.createObjectURL(blob);
+ const link=document.createElement('a');link.href=objectUrl;link.download=name;
+ document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(objectUrl),60000);
 }
 let toastTimer;
 function toast(message,error=false){$('#toast').hidden=false;$('#toast').className='toast'+(error?' error':'');$('#toast').textContent=message;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,6000);}
@@ -382,6 +396,12 @@ document.addEventListener('change',ev=>{
  if(ev.target.closest('#report-form'))invalidateReport();
 });
 document.addEventListener('click',async ev=>{
+ const download=ev.target.closest('a[href^="/api/backups/"]');
+ if(download){
+  ev.preventDefault();
+  try{await downloadFile(download.getAttribute('href'),download.textContent);}catch(error){if(!(error instanceof StaleRequestError))toast(error.message,true);}
+  return;
+ }
  const b=ev.target.closest('button');if(!b)return;
  try{
   if(b.dataset.nav){location.hash=b.dataset.nav;setMenu(false);}
@@ -410,7 +430,7 @@ document.addEventListener('click',async ev=>{
   if(b.hasAttribute('data-account-new'))accountEditor();
   if(b.dataset.accountEdit)accountEditor(b.dataset.accountEdit);
   if(b.dataset.accountDelete){if(await confirmAction('Xóa tài khoản','Tài khoản của nhân viên đã có chứng từ phải được khóa để giữ lịch sử.')){await api('/api/accounts/'+b.dataset.accountDelete,'DELETE');await reload();toast('Đã xóa tài khoản.');}}
-  if(b.id==='csv-export'){if(!S.report)throw Error('Xem báo cáo trước khi xuất CSV.');location.href='/api/report?'+S.report+'&format=csv';}
+  if(b.id==='csv-export'){if(!S.report)throw Error('Xem báo cáo trước khi xuất CSV.');await downloadFile('/api/report?'+S.report+'&format=csv','bao_cao_kho.csv');}
   if(b.id==='backup-create'){b.disabled=true;const x=await api('/api/backup','POST',{});S.backup=x.file;render();toast(x.message);}
   if(b.id==='restore-test'){
    if(!await confirmAction('Kiểm chứng khôi phục','Khôi phục vào bản thử nghiệm riêng và kiểm tra dữ liệu, đăng nhập, giao dịch. Dữ liệu đang dùng được giữ nguyên.'))return;
